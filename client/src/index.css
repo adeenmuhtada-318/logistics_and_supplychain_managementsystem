@@ -1,0 +1,97 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --brand: #1F7A63;
+    --brand-hover: #186350;
+    --brand-light: #ecfdf5;
+    --navy: #081C2D;
+    --navy-surface: #0D253A;
+    --navy-border: #16354D;
+    --surface: #F5F7FA;
+    --surface-card: #FFFFFF;
+    --coolgray: #9AA3A8;
+    --coolgray-text: #64748B;
+    --text-primary: #0f172a;
+    --text-secondary: #64748B;
+    --border: #E2E8F0;
+    --bg-page: #F5F7FA;
+    --bg-card: #FFFFFF;
+    --bg-sidebar: #FFFFFF;
+    --bg-nav: #FFFFFF;
+    --table-header: #F8FAFC;
+    --table-row-hover: #F1F5F9;
+    --table-border: #E2E8F0;
+    --input-bg: #FFFFFF;
+    --input-border: #CBD5E1;
+    --modal-bg: #FFFFFF;
+    --ring: #1F7A63;
+  }
+
+  .dark {
+    --text-primary: #F1F5F9;
+    --text-secondary: #94A3B8;
+    --border: #16354D;
+    --bg-page: #081C2D;
+    --bg-card: #0D253A;
+    --bg-sidebar: #081C2D;
+    --bg-nav: #081C2D;
+    --table-header: #0D253A;
+    --table-row-hover: #163d60;
+    --table-border: #16354D;
+    --input-bg: #0D253A;
+    --input-border: #16354D;
+    --modal-bg: #0D253A;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    background-color: var(--bg-page);
+    color: var(--text-primary);
+    transition: background-color 150ms, color 150ms;
+  }
+
+  code, pre, .font-mono {
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  }
+}
+
+/* Scrollbar — adapts to theme */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--coolgray);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--coolgray-text);
+}
+
+/* Selection color */
+::selection {
+  background: rgba(31, 122, 99, 0.25);
+  color: inherit;
+}
+
+/* Focus ring utility */
+@layer utilities {
+  .focus-ring {
+    @apply focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:ring-offset-1;
+  }
+  .dark .focus-ring {
+    @apply focus:ring-offset-navy-700;
+  }
+}
