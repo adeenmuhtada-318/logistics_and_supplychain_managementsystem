@@ -19,6 +19,8 @@ const register = async (req, res, next) => {
       baseSalary,
       shiftType,
       address,
+      currentCity,
+      currentProvince
     } = req.body;
 
     const existingUser = await User.findOne({ email });
@@ -43,6 +45,8 @@ const register = async (req, res, next) => {
       baseSalary: Number(baseSalary) || 0,
       shiftType: shiftType || 'Morning',
       address: address || {},
+      currentCity: currentCity || '',
+      currentProvince: currentProvince || '',
       status: 'Active',
     });
 
@@ -213,10 +217,69 @@ const updateStaffStatus = async (req, res, next) => {
   }
 };
 
+/**
+ * @desc    Register a B2B Corporate Client
+ * @route   POST /api/auth/register-client
+ * @access  Public
+ */
+const registerClient = async (req, res, next) => {
+  try {
+    const {
+      name,
+      email,
+      password,
+      corporateProfile
+    } = req.body;
+
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(400).json({
+        success: false,
+        message: 'Account with this email already exists.',
+      });
+    }
+
+    if (!corporateProfile || !corporateProfile.companyName || !corporateProfile.ntn) {
+      return res.status(400).json({
+        success: false,
+        message: 'Corporate profile with companyName and ntn is required.',
+      });
+    }
+
+    const user = await User.create({
+      name,
+      email,
+      password,
+      role: 'Client',
+      corporateProfile,
+      status: 'Active',
+    });
+
+    const token = generateToken(user._id, user.role);
+
+    res.status(201).json({
+      success: true,
+      message: 'Client registered successfully',
+      token,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        corporateProfile: user.corporateProfile,
+        status: user.status,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   register,
   login,
   getMe,
   getStaffList,
   updateStaffStatus,
+  registerClient,
 };

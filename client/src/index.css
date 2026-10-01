@@ -4,46 +4,49 @@
 
 @layer base {
   :root {
-    --brand: #1F7A63;
-    --brand-hover: #186350;
-    --brand-light: #ecfdf5;
-    --navy: #081C2D;
-    --navy-surface: #0D253A;
-    --navy-border: #16354D;
-    --surface: #F5F7FA;
-    --surface-card: #FFFFFF;
+    /* Cyber-Noir Theme */
+    --brand: #00E676;
+    --brand-hover: #00C264;
+    --brand-dim: rgba(0, 230, 118, 0.10);
+    --brand-light: rgba(0, 230, 118, 0.06);
+    --text-primary: #E8EAED;
+    --text-secondary: #9AA3A8;
+    --border: #2A2A2A;
+    --bg-page: #121212;
+    --bg-card: #1E1E1E;
+    --bg-sidebar: #161616;
+    --bg-nav: #161616;
+    --table-header: #181818;
+    --table-row-hover: #242424;
+    --table-border: #2A2A2A;
+    --input-bg: #1A1A1A;
+    --input-border: #3A3A3A;
+    --modal-bg: #1E1E1E;
     --coolgray: #9AA3A8;
-    --coolgray-text: #64748B;
-    --text-primary: #0f172a;
-    --text-secondary: #64748B;
-    --border: #E2E8F0;
-    --bg-page: #F5F7FA;
-    --bg-card: #FFFFFF;
-    --bg-sidebar: #FFFFFF;
-    --bg-nav: #FFFFFF;
-    --table-header: #F8FAFC;
-    --table-row-hover: #F1F5F9;
-    --table-border: #E2E8F0;
-    --input-bg: #FFFFFF;
-    --input-border: #CBD5E1;
-    --modal-bg: #FFFFFF;
-    --ring: #1F7A63;
+    --coolgray-text: #6B7A80;
+    --danger: #FF5252;
+    --danger-dim: rgba(255,82,82,0.10);
+    --warning: #FFD740;
+    --warning-dim: rgba(255,215,64,0.10);
+    --success: #00E676;
+    --ring: #00E676;
   }
 
   .dark {
-    --text-primary: #F1F5F9;
-    --text-secondary: #94A3B8;
-    --border: #16354D;
-    --bg-page: #081C2D;
-    --bg-card: #0D253A;
-    --bg-sidebar: #081C2D;
-    --bg-nav: #081C2D;
-    --table-header: #0D253A;
-    --table-row-hover: #163d60;
-    --table-border: #16354D;
-    --input-bg: #0D253A;
-    --input-border: #16354D;
-    --modal-bg: #0D253A;
+    /* Same as root — Cyber-Noir is dark-first */
+    --text-primary: #E8EAED;
+    --text-secondary: #9AA3A8;
+    --border: #2A2A2A;
+    --bg-page: #121212;
+    --bg-card: #1E1E1E;
+    --bg-sidebar: #161616;
+    --bg-nav: #161616;
+    --table-header: #181818;
+    --table-row-hover: #242424;
+    --table-border: #2A2A2A;
+    --input-bg: #1A1A1A;
+    --input-border: #3A3A3A;
+    --modal-bg: #1E1E1E;
   }
 
   html {
@@ -78,6 +81,17 @@
 }
 ::-webkit-scrollbar-thumb:hover {
   background: var(--coolgray-text);
+}
+
+/* Cyber-Noir accent glow — minimal, used only on active nav items */
+.brand-glow {
+  box-shadow: 0 0 12px rgba(0, 230, 118, 0.25);
+}
+
+/* Status dot — pulsing green */
+.status-dot-active {
+  @apply inline-block w-2 h-2 rounded-full bg-[#00E676];
+  box-shadow: 0 0 6px #00E676;
 }
 
 /* Selection color */

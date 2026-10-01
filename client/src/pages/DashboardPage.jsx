@@ -1,5 +1,8 @@
 import React, { useEffect, useMemo, useCallback } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
+
+/** Roles permitted to view financial data (costs, payroll). */
+const FINANCIAL_ROLES = ['Fleet_Manager', 'Accountant'];
 import { fetchFleetAnalytics } from '../features/analytics/analyticsSlice';
 import { useTheme } from '../context/ThemeContext';
 import { StatCard } from '../components/ui/StatCard';
@@ -56,6 +59,10 @@ const DispatchRow = React.memo(({ disp, getPriorityBadge, getStatusBadge }) => {
 export const DashboardPage = () => {
   const dispatch = useDispatch();
   const { theme } = useTheme();
+
+  const { user } = useSelector((state) => state.auth);
+  /** True only for Fleet_Manager and Accountant — hides cost/payroll data from other roles. */
+  const canViewFinancials = FINANCIAL_ROLES.includes(user?.role);
   
   // Destructure fleetData or fallback to data just in case
   const { fleetData, data, loading } = useSelector((state) => state.analytics);
@@ -177,60 +184,64 @@ export const DashboardPage = () => {
           accent={true}
           loading={loading}
         />
-        <StatCard
-          title="Monthly Operating Cost"
-          value={`$${totalOperatingCost.toLocaleString()}`}
-          subtitle={`Fuel: $${(summary.totalFuelExpense || 0).toLocaleString()}`}
-          icon={DollarSign}
-          accent={true}
-          loading={loading}
-        />
+        {canViewFinancials && (
+          <StatCard
+            title="Monthly Operating Cost"
+            value={`$${totalOperatingCost.toLocaleString()}`}
+            subtitle={`Fuel: $${(summary.totalFuelExpense || 0).toLocaleString()}`}
+            icon={DollarSign}
+            accent={true}
+            loading={loading}
+          />
+        )}
       </div>
 
       {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Bar Chart */}
-        <Card className="bg-[var(--bg-card)] border-[var(--border)] p-4 flex flex-col">
-          <CardHeader className="px-0 pt-0 pb-4 flex flex-row items-center justify-between">
-            <div>
-              <CardTitle className="text-base font-semibold text-[var(--text-primary)]">Monthly Operating Costs</CardTitle>
+        {/* Bar Chart — financial roles only */}
+        {canViewFinancials && (
+          <Card className="bg-[var(--bg-card)] border-[var(--border)] p-4 flex flex-col">
+            <CardHeader className="px-0 pt-0 pb-4 flex flex-row items-center justify-between">
+              <div>
+                <CardTitle className="text-base font-semibold text-[var(--text-primary)]">Monthly Operating Costs</CardTitle>
+              </div>
+              <TrendingUp className="w-4 h-4 text-[var(--text-secondary)]" />
+            </CardHeader>
+            <div className="h-64 mt-2">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={costTrends}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--table-border)" vertical={false} />
+                  <XAxis 
+                    dataKey="month" 
+                    tick={{ fill: 'var(--text-secondary)', fontSize: 11 }}
+                    axisLine={{ stroke: 'var(--table-border)' }}
+                    tickLine={false}
+                  />
+                  <YAxis 
+                    tickFormatter={yAxisFormatter}
+                    tick={{ fill: 'var(--text-secondary)', fontSize: 11 }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <Tooltip
+                    formatter={tooltipFormatter}
+                    contentStyle={{
+                      backgroundColor: tooltipBg,
+                      borderColor: tooltipBorder,
+                      color: tooltipText,
+                      fontSize: '12px',
+                      borderRadius: '6px'
+                    }}
+                    itemStyle={{ color: tooltipText }}
+                  />
+                  <Bar dataKey="fuel" name="Fuel" fill="#1F7A63" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="tolls" name="Tolls" fill="#9AA3A8" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="payroll" name="Payroll" fill="#F59E0B" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
             </div>
-            <TrendingUp className="w-4 h-4 text-[var(--text-secondary)]" />
-          </CardHeader>
-          <div className="h-64 mt-2">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={costTrends}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--table-border)" vertical={false} />
-                <XAxis 
-                  dataKey="month" 
-                  tick={{ fill: 'var(--text-secondary)', fontSize: 11 }}
-                  axisLine={{ stroke: 'var(--table-border)' }}
-                  tickLine={false}
-                />
-                <YAxis 
-                  tickFormatter={yAxisFormatter}
-                  tick={{ fill: 'var(--text-secondary)', fontSize: 11 }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <Tooltip
-                  formatter={tooltipFormatter}
-                  contentStyle={{
-                    backgroundColor: tooltipBg,
-                    borderColor: tooltipBorder,
-                    color: tooltipText,
-                    fontSize: '12px',
-                    borderRadius: '6px'
-                  }}
-                  itemStyle={{ color: tooltipText }}
-                />
-                <Bar dataKey="fuel" name="Fuel" fill="#1F7A63" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="tolls" name="Tolls" fill="#9AA3A8" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="payroll" name="Payroll" fill="#F59E0B" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
+          </Card>
+        )}
 
         {/* Pie Chart */}
         <Card className="bg-[var(--bg-card)] border-[var(--border)] p-4 flex flex-col">

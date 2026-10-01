@@ -10,6 +10,9 @@ import { DispatchesPage } from '../pages/DispatchesPage';
 import { RoutesPage } from '../pages/RoutesPage';
 import { AttendancePage } from '../pages/AttendancePage';
 import { PayrollPage } from '../pages/PayrollPage';
+import { ClientRegister } from '../pages/client/ClientRegister';
+import { ClientDashboard } from '../pages/client/ClientDashboard';
+import { DriverConsent } from '../pages/driver/DriverConsent';
 
 export const AppRoutes = () => {
   return (
@@ -31,8 +34,22 @@ export const AppRoutes = () => {
         <Route path="/dispatches" element={<DispatchesPage />} />
         <Route path="/routes" element={<RoutesPage />} />
         <Route path="/attendance" element={<AttendancePage />} />
-        <Route path="/payroll" element={<PayrollPage />} />
+        <Route
+          path="/payroll"
+          element={
+            <ProtectedRoute allowedRoles={['Fleet_Manager', 'Accountant']}>
+              <PayrollPage />
+            </ProtectedRoute>
+          }
+        />
       </Route>
+
+      {/* B2B Client Portal — standalone full-page routes */}
+      <Route path="/client/register" element={<ClientRegister />} />
+      <Route path="/client/dashboard" element={<ClientDashboard />} />
+
+      {/* Driver Opt-In Consent Terminal */}
+      <Route path="/driver/consent" element={<DriverConsent />} />
 
       {/* Wildcard redirect */}
       <Route path="*" element={<Navigate to="/dashboard" replace />} />

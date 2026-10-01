@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useDispatch } from 'react-redux';
 import { createRoute } from '../../features/routes/routeSlice';
 import { Modal } from '../ui/Modal';
@@ -15,6 +15,7 @@ export const CreateRouteModal = React.memo(({ isOpen, onClose }) => {
     destinationHub: '',
     estimatedDistanceKm: 300,
     estimatedDurationHours: 4.0,
+    fuelRequiredLiters: 75.0,
     tollExpenses: 25.0,
     waypoints: [
       { name: 'Midway Staging Hub', order: 1, estimatedStopMinutes: 20 },
@@ -72,9 +73,70 @@ export const CreateRouteModal = React.memo(({ isOpen, onClose }) => {
     }
   };
 
-  const distance = Number(formData.estimatedDistanceKm) || 0;
-  const estimatedFuelLiters = ((distance / 100) * 30).toFixed(1);
-  const estimatedCO2 = (estimatedFuelLiters * 2.68).toFixed(1);
+  // ── Auto-Calculation Engine ──────────────────────────────────────────────
+  useEffect(() => {
+    const DISTANCE_MATRIX = {
+      'lahore-karachi': 1210,
+      'karachi-lahore': 1210,
+      'lahore-islamabad': 380,
+      'islamabad-lahore': 380,
+      'lahore-faisalabad': 180,
+      'faisalabad-lahore': 180,
+      'karachi-islamabad': 1400,
+      'islamabad-karachi': 1400,
+      'faisalabad-multan': 240,
+      'multan-faisalabad': 240,
+      'karachi-faisalabad': 1100,
+      'faisalabad-karachi': 1100,
+      'islamabad-faisalabad': 290,
+      'faisalabad-islamabad': 290,
+      'lahore-multan': 340,
+      'multan-lahore': 340,
+      'karachi-multan': 900,
+      'multan-karachi': 900,
+      'islamabad-multan': 560,
+      'multan-islamabad': 560,
+    };
+
+    const origin = formData.originHub.trim().toLowerCase();
+    const destination = formData.destinationHub.trim().toLowerCase();
+
+    if (!origin || !destination) return;
+
+    const normalize = (s) => {
+      for (const key of Object.keys(DISTANCE_MATRIX)) {
+        if (key.startsWith(s.split(' ')[0]) || s.includes(key.split('-')[0])) return key.split('-')[0];
+      }
+      return s.split(' ')[0];
+    };
+
+    const oKey = normalize(origin);
+    const dKey = normalize(destination);
+    const matrixKey = `${oKey}-${dKey}`;
+
+    const distKm =
+      DISTANCE_MATRIX[matrixKey] ??
+      Math.floor(Math.random() * (800 - 100 + 1)) + 100;
+
+    const transitHours = parseFloat((distKm / 60).toFixed(2));
+    const fuelLiters = parseFloat((distKm * 0.25).toFixed(2));
+
+    setFormData((prev) => ({
+      ...prev,
+      estimatedDistanceKm: distKm,
+      estimatedDurationHours: transitHours,
+      fuelRequiredLiters: fuelLiters,
+    }));
+  }, [formData.originHub, formData.destinationHub]);
+  // ─────────────────────────────────────────────────────────────────────────
+
+  const calcDistance = Number(formData.estimatedDistanceKm) || 0;
+  const calcTransitHours = Number(formData.estimatedDurationHours) || 0;
+  const calcFuelLiters = Number(formData.fuelRequiredLiters) || 0;
+  const calcTransitDisplay =
+    calcTransitHours >= 1
+      ? `${Math.floor(calcTransitHours)}h ${Math.round((calcTransitHours % 1) * 60)}m`
+      : `${Math.round(calcTransitHours * 60)}m`;
 
   return (
     <Modal
@@ -121,28 +183,211 @@ export const CreateRouteModal = React.memo(({ isOpen, onClose }) => {
           />
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <Input
-            label="Estimated Distance (km)"
-            type="number"
-            name="estimatedDistanceKm"
-            value={formData.estimatedDistanceKm}
-            onChange={handleChange}
-            min={1}
-            required
-            className="h-9 rounded-md border-[var(--input-border)] bg-[var(--input-bg)] text-sm text-[var(--text-primary)] focus:ring-2 focus:ring-brand-500/40 transition-colors duration-150"
+        {/* ── Automated Route Metrics Panel ──────────────────────────── */}
+        <div
+          style={{
+            background: '#1A1A1A',
+            border: '1px solid #2A2A2A',
+            borderRadius: '8px',
+            padding: '14px 16px',
+            position: 'relative',
+            overflow: 'hidden',
+          }}
+        >
+          {/* Accent bar */}
+          <div
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '3px',
+              height: '100%',
+              background: 'linear-gradient(180deg, #00E676 0%, #00BFA5 100%)',
+              borderRadius: '8px 0 0 8px',
+            }}
           />
-          <Input
-            label="Estimated Transit (Hours)"
-            type="number"
-            name="estimatedDurationHours"
-            value={formData.estimatedDurationHours}
-            onChange={handleChange}
-            step="0.1"
-            min={0.1}
-            required
-            className="h-9 rounded-md border-[var(--input-border)] bg-[var(--input-bg)] text-sm text-[var(--text-primary)] focus:ring-2 focus:ring-brand-500/40 transition-colors duration-150"
-          />
+
+          <div style={{ paddingLeft: '8px' }}>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                marginBottom: '12px',
+              }}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#00E676" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <polyline points="12 6 12 12 16 14" />
+              </svg>
+              <span
+                style={{
+                  fontSize: '9px',
+                  fontWeight: 700,
+                  letterSpacing: '0.12em',
+                  textTransform: 'uppercase',
+                  color: '#00E676',
+                  fontFamily: 'monospace',
+                }}
+              >
+                Automated Route Metrics
+              </span>
+              <span
+                style={{
+                  marginLeft: 'auto',
+                  fontSize: '8px',
+                  fontWeight: 600,
+                  letterSpacing: '0.08em',
+                  color: '#9AA3A8',
+                  fontFamily: 'monospace',
+                  background: '#242424',
+                  border: '1px solid #333',
+                  borderRadius: '4px',
+                  padding: '1px 6px',
+                }}
+              >
+                AUTO-CALC
+              </span>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+              {/* Distance */}
+              <div
+                style={{
+                  background: '#1E1E1E',
+                  border: '1px solid #2A2A2A',
+                  borderRadius: '6px',
+                  padding: '10px 12px',
+                }}
+              >
+                <span
+                  style={{
+                    display: 'block',
+                    fontSize: '8.5px',
+                    fontWeight: 600,
+                    letterSpacing: '0.1em',
+                    textTransform: 'uppercase',
+                    color: '#9AA3A8',
+                    marginBottom: '6px',
+                    fontFamily: 'monospace',
+                  }}
+                >
+                  Distance
+                </span>
+                <span
+                  style={{
+                    display: 'block',
+                    fontSize: '18px',
+                    fontWeight: 700,
+                    color: '#00E676',
+                    fontFamily: 'monospace',
+                    lineHeight: 1,
+                  }}
+                >
+                  {calcDistance.toLocaleString()}
+                </span>
+                <span style={{ fontSize: '9px', color: '#9AA3A8', fontFamily: 'monospace' }}>
+                  km
+                </span>
+              </div>
+
+              {/* Transit Time */}
+              <div
+                style={{
+                  background: '#1E1E1E',
+                  border: '1px solid #2A2A2A',
+                  borderRadius: '6px',
+                  padding: '10px 12px',
+                }}
+              >
+                <span
+                  style={{
+                    display: 'block',
+                    fontSize: '8.5px',
+                    fontWeight: 600,
+                    letterSpacing: '0.1em',
+                    textTransform: 'uppercase',
+                    color: '#9AA3A8',
+                    marginBottom: '6px',
+                    fontFamily: 'monospace',
+                  }}
+                >
+                  Transit Time
+                </span>
+                <span
+                  style={{
+                    display: 'block',
+                    fontSize: '18px',
+                    fontWeight: 700,
+                    color: '#E0E0E0',
+                    fontFamily: 'monospace',
+                    lineHeight: 1,
+                  }}
+                >
+                  {calcTransitDisplay}
+                </span>
+                <span style={{ fontSize: '9px', color: '#9AA3A8', fontFamily: 'monospace' }}>
+                  @ 60 km/h avg
+                </span>
+              </div>
+
+              {/* Fuel Required */}
+              <div
+                style={{
+                  background: '#1E1E1E',
+                  border: '1px solid #2A2A2A',
+                  borderRadius: '6px',
+                  padding: '10px 12px',
+                }}
+              >
+                <span
+                  style={{
+                    display: 'block',
+                    fontSize: '8.5px',
+                    fontWeight: 600,
+                    letterSpacing: '0.1em',
+                    textTransform: 'uppercase',
+                    color: '#9AA3A8',
+                    marginBottom: '6px',
+                    fontFamily: 'monospace',
+                  }}
+                >
+                  Fuel Required
+                </span>
+                <span
+                  style={{
+                    display: 'block',
+                    fontSize: '18px',
+                    fontWeight: 700,
+                    color: '#FFB300',
+                    fontFamily: 'monospace',
+                    lineHeight: 1,
+                  }}
+                >
+                  {calcFuelLiters.toLocaleString()}
+                </span>
+                <span style={{ fontSize: '9px', color: '#9AA3A8', fontFamily: 'monospace' }}>
+                  liters (0.25 L/km)
+                </span>
+              </div>
+            </div>
+
+            <p
+              style={{
+                marginTop: '10px',
+                fontSize: '9px',
+                color: '#555',
+                fontFamily: 'monospace',
+                letterSpacing: '0.04em',
+              }}
+            >
+              ⚡ Values auto-computed from origin &amp; destination. Matrix-matched for PK hubs; random fallback otherwise.
+            </p>
+          </div>
+        </div>
+        {/* ──────────────────────────────────────────────────────────── */}
+
+        <div className="grid grid-cols-1 sm:grid-cols-1 gap-4">
           <Input
             label="Toll Fees ($)"
             type="number"
@@ -161,7 +406,7 @@ export const CreateRouteModal = React.memo(({ isOpen, onClose }) => {
               Est. Diesel Fuel Consumption
             </span>
             <span className="font-mono text-blue-600 dark:text-blue-400 font-bold text-sm">
-              ~{estimatedFuelLiters} Liters
+              ~{calcFuelLiters.toFixed(1)} Liters
             </span>
           </div>
           <div>
@@ -169,7 +414,7 @@ export const CreateRouteModal = React.memo(({ isOpen, onClose }) => {
               Estimated Carbon Footprint
             </span>
             <span className="font-mono text-[#1F7A63] font-bold text-sm">
-              ~{estimatedCO2} kg CO2
+              ~{(calcFuelLiters * 2.68).toFixed(1)} kg CO2
             </span>
           </div>
         </div>

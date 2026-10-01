@@ -6,6 +6,9 @@ import routeReducer from '../features/routes/routeSlice';
 import attendanceReducer from '../features/attendance/attendanceSlice';
 import payrollReducer from '../features/payroll/payrollSlice';
 import analyticsReducer from '../features/analytics/analyticsSlice';
+import orderReducer from '../features/orders/orderSlice';
+import pricingReducer from '../features/pricing/pricingSlice';
+import locationReducer from '../features/locations/locationSlice';
 
 export const store = configureStore({
   reducer: {
@@ -16,6 +19,9 @@ export const store = configureStore({
     attendance: attendanceReducer,
     payroll: payrollReducer,
     analytics: analyticsReducer,
+    orders: orderReducer,
+    pricing: pricingReducer,
+    locations: locationReducer,
   },
 });
 

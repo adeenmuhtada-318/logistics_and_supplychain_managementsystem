@@ -48,7 +48,7 @@ router.post(
  *       200:
  *         description: List of payroll records
  */
-router.get('/', protect, getAllPayroll);
+router.get('/', protect, authorize('Fleet_Manager', 'Accountant'), getAllPayroll);
 
 /**
  * @swagger
@@ -62,7 +62,7 @@ router.get('/', protect, getAllPayroll);
  *       200:
  *         description: Payslip details
  */
-router.get('/:id', protect, getPayrollById);
+router.get('/:id', protect, authorize('Fleet_Manager', 'Accountant'), getPayrollById);
 
 /**
  * @swagger
