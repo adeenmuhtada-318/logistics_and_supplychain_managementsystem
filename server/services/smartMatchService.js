@@ -1,186 +1,155 @@
-const User = require('../models/User');
-const Vehicle = require('../models/Vehicle');
+const User  = require('../models/User');
 const Order = require('../models/Order');
 
-async function findMatchCandidates(order) {
-    const { pickup, cargoWeightKg } = order;
-    
-    let vehicles = await Vehicle.find({
-        status: 'Available',
-        capacityKg: { $gte: cargoWeightKg },
-        currentCity: { $regex: new RegExp(`^${pickup.city}$`, 'i') }
-    }).populate('assignedDriver');
-    
-    if (vehicles.length === 0) {
-        vehicles = await Vehicle.find({
-            status: 'Available',
-            capacityKg: { $gte: cargoWeightKg },
-            currentProvince: { $regex: new RegExp(`^${pickup.province}$`, 'i') }
-        }).populate('assignedDriver');
-    }
+/**
+ * Broadcast an order to ALL available drivers in or near the pickup city.
+ * Replaces the old sequential one-by-one offer logic with an opt-in broadcast model:
+ * every online Driver with status 'Active' sees the trip and can Accept or Decline.
+ *
+ * The order stays in 'Pending-Driver-Consent' until the first driver accepts,
+ * or until the 72-hour expiry cron cancels it.
+ */
+async function broadcastToDrivers(orderId) {
+  const order = await Order.findById(orderId);
+  if (!order) return;
 
-    const candidates = [];
+  // Find all active drivers (in same city first, then province)
+  let drivers = await User.find({
+    role: 'Driver',
+    status: { $in: ['Active', 'Off Duty'] }, // Available / not suspended
+    'driverConsent.status': { $ne: 'Accepted' }, // not locked to another order
+    currentCity: { $regex: new RegExp(`^${order.pickup.city}$`, 'i') },
+  });
 
-    for (const vehicle of vehicles) {
-        let driver = vehicle.assignedDriver;
-        if (!driver) {
-            // Find any active driver in same city
-            driver = await User.findOne({
-                role: 'Driver',
-                status: 'Active',
-                'driverConsent.status': { $ne: 'Pending' },
-                city: { $regex: new RegExp(`^${pickup.city}$`, 'i') }
-            });
-        }
-        
-        if (driver && driver.driverConsent?.status !== 'Pending') {
-            const isExactCity = vehicle.currentCity.toLowerCase() === pickup.city.toLowerCase();
-            const capacityRatio = vehicle.capacityKg / cargoWeightKg;
-            
-            candidates.push({
-                driver,
-                vehicle,
-                score: (isExactCity ? 100 : 0) + (10 / capacityRatio), // simple scoring
-                isExactCity,
-                capacityRatio
-            });
-        }
-    }
-    
-    candidates.sort((a, b) => {
-        if (a.isExactCity !== b.isExactCity) return b.isExactCity - a.isExactCity;
-        if (a.capacityRatio !== b.capacityRatio) return a.capacityRatio - b.capacityRatio; // smaller ratio better
-        
-        const aLastActive = a.driver.lastActive ? new Date(a.driver.lastActive).getTime() : 0;
-        const bLastActive = b.driver.lastActive ? new Date(b.driver.lastActive).getTime() : 0;
-        return aLastActive - bLastActive; 
+  // If no city match, broaden to province
+  if (drivers.length === 0) {
+    drivers = await User.find({
+      role: 'Driver',
+      status: { $in: ['Active', 'Off Duty'] },
+      'driverConsent.status': { $ne: 'Accepted' },
+      currentProvince: { $regex: new RegExp(`^${order.pickup.province}$`, 'i') },
     });
+  }
 
-    return candidates.slice(0, 10);
-}
+  if (drivers.length === 0) {
+    console.log(`[SmartMatch] No available drivers for order ${order.orderNumber}. Order will wait in broadcast queue.`);
+    return;
+  }
 
-async function offerToNextDriver(orderId) {
-    const order = await Order.findById(orderId);
-    if (!order) return null;
-    
-    const candidates = await findMatchCandidates(order);
-    
-    const offeredDriverIds = (order.driverOfferHistory || []).map(h => h.driverId.toString());
-    
-    const nextCandidate = candidates.find(c => !offeredDriverIds.includes(c.driver._id.toString()));
-    
-    if (!nextCandidate) {
-        return null;
-    }
-    
-    const driver = nextCandidate.driver;
-    
-    driver.driverConsent = {
-        status: 'Pending',
-        currentOfferId: orderId,
-        offeredAt: new Date()
-    };
-    await driver.save();
-    
-    order.status = 'Pending-Driver-Consent';
-    order.driverOfferHistory = order.driverOfferHistory || [];
-    order.driverOfferHistory.push({
-        driverId: driver._id,
+  console.log(`[SmartMatch] Broadcasting order ${order.orderNumber} to ${drivers.length} driver(s).`);
+
+  // Mark each driver as having a pending offer (visibility flag)
+  for (const driver of drivers) {
+    // Only add if not already in offer history
+    const alreadyOffered = order.driverOfferHistory.some(
+      (h) => h.driver.toString() === driver._id.toString()
+    );
+    if (!alreadyOffered) {
+      order.driverOfferHistory.push({
+        driver:    driver._id,
         offeredAt: new Date(),
-        status: 'Pending'
-    });
-    await order.save();
-    
-    startConsentTimer(orderId, driver._id);
-    
-    return driver;
+        response:  'Pending',
+      });
+    }
+
+    // Update driver's consent state to show this order
+    if (driver.driverConsent?.status !== 'Accepted') {
+      driver.driverConsent = {
+        status:         'Pending',
+        currentOfferId: orderId,
+        offeredAt:      new Date(),
+      };
+      await driver.save();
+    }
+  }
+
+  await order.save();
 }
 
+/**
+ * Handle a driver's explicit Accept or Decline response to a broadcasted trip.
+ *
+ * Accept  → locks the order to that driver, sets status 'Driver-Accepted',
+ *           clears all other pending driver offers.
+ * Decline → marks that driver's offer as Declined, frees them to see other orders,
+ *           order stays in broadcast queue for remaining drivers.
+ */
 async function handleDriverResponse(orderId, driverId, response) {
-    const order = await Order.findById(orderId);
-    const driver = await User.findById(driverId);
-    
-    if (!order || !driver) throw new Error('Order or Driver not found');
-    
-    let nextDriverOffered = false;
-    
-    const historyEntry = order.driverOfferHistory.find(h => h.driverId.toString() === driverId.toString() && h.status === 'Pending');
-    if (historyEntry) {
-        historyEntry.status = response;
-        historyEntry.respondedAt = new Date();
-    }
-    
-    if (response === 'Accepted') {
-        driver.driverConsent.status = 'Accepted';
-        driver.driverConsent.respondedAt = new Date();
-        
-        order.status = 'Driver-Accepted';
-        order.assignedDriver = driverId;
-        order.checkpoints = order.checkpoints || [];
-        order.checkpoints.push({
-            status: 'Driver-Accepted',
-            location: 'System',
-            timestamp: new Date()
-        });
-        
-        // Find vehicle and set In Transit
-        const vehicle = await Vehicle.findOne({ assignedDriver: driverId });
-        if (vehicle) {
-            vehicle.status = 'In Transit';
-            await vehicle.save();
-        }
-        
-    } else if (response === 'Declined') {
-        driver.driverConsent.status = 'Idle';
-        driver.driverConsent.currentOfferId = null;
-        driver.driverConsent.respondedAt = new Date();
-        
-        const nextDriver = await offerToNextDriver(orderId);
-        if (nextDriver) {
-            nextDriverOffered = true;
-        } else {
-            // no more drivers
-            order.status = 'Pending-Fare-Estimate'; 
-        }
-    }
-    
-    await driver.save();
-    await order.save();
-    
-    return { order, driver, nextDriverOffered };
-}
+  const [order, driver] = await Promise.all([
+    Order.findById(orderId),
+    User.findById(driverId),
+  ]);
 
-function startConsentTimer(orderId, driverId, timeoutMs = 300000) {
-    return setTimeout(async () => {
-        try {
-            const driver = await User.findById(driverId);
-            const order = await Order.findById(orderId);
-            
-            if (driver && driver.driverConsent?.currentOfferId?.toString() === orderId.toString() && driver.driverConsent?.status === 'Pending') {
-                driver.driverConsent.status = 'Timed-Out';
-                driver.driverConsent.currentOfferId = null;
-                await driver.save();
-                
-                if (order) {
-                    const historyEntry = order.driverOfferHistory.find(h => h.driverId.toString() === driverId.toString() && h.status === 'Pending');
-                    if (historyEntry) {
-                        historyEntry.status = 'Timed-Out';
-                        historyEntry.respondedAt = new Date();
-                        await order.save();
-                    }
-                    
-                    await offerToNextDriver(orderId);
-                }
-            }
-        } catch (error) {
-            console.error('Consent timer error:', error);
-        }
-    }, timeoutMs);
+  if (!order || !driver) throw new Error('Order or Driver not found.');
+
+  // Find this driver's entry in the offer history
+  const historyEntry = order.driverOfferHistory.find(
+    (h) => h.driver.toString() === driverId.toString() && h.response === 'Pending'
+  );
+
+  if (!historyEntry) {
+    throw new Error('No pending offer found for this driver on this order.');
+  }
+
+  if (response === 'Accepted') {
+    // ── Lock order to this driver ────────────────────────────────────────
+    historyEntry.response    = 'Accepted';
+    historyEntry.respondedAt = new Date();
+
+    order.status         = 'Driver-Accepted';
+    order.assignedDriver = driverId;
+    order.driverAssignedAt = new Date();
+    order.checkpoints.push({
+      status:    'Driver Assigned',
+      location:  order.pickup.city,
+      notes:     `Driver ${driver.name} accepted the trip.`,
+      timestamp: new Date(),
+    });
+
+    // Decline all other pending offers for this order
+    for (const h of order.driverOfferHistory) {
+      if (h.driver.toString() !== driverId.toString() && h.response === 'Pending') {
+        h.response    = 'Declined';
+        h.respondedAt = new Date();
+
+        // Reset the other driver's consent state
+        await User.findByIdAndUpdate(h.driver, {
+          $set: { 'driverConsent.status': 'Idle', 'driverConsent.currentOfferId': null },
+        });
+      }
+    }
+
+    // Lock accepting driver's consent state
+    driver.driverConsent = {
+      status:         'Accepted',
+      currentOfferId: orderId,
+      respondedAt:    new Date(),
+    };
+
+  } else if (response === 'Declined') {
+    // ── Driver opts out, stays available for other trips ─────────────────
+    historyEntry.response    = 'Declined';
+    historyEntry.respondedAt = new Date();
+
+    driver.driverConsent = {
+      status:         'Idle',
+      currentOfferId: null,
+      respondedAt:    new Date(),
+    };
+
+    // Check if any other drivers still have a Pending offer; if none, log it
+    const remainingPending = order.driverOfferHistory.filter((h) => h.response === 'Pending');
+    if (remainingPending.length === 0) {
+      console.log(`[SmartMatch] All drivers declined order ${order.orderNumber}. Stays in broadcast queue until expiry.`);
+    }
+  }
+
+  await Promise.all([order.save(), driver.save()]);
+
+  return { order, driver };
 }
 
 module.exports = {
-    findMatchCandidates,
-    offerToNextDriver,
-    handleDriverResponse,
-    startConsentTimer
+  broadcastToDrivers,
+  handleDriverResponse,
 };

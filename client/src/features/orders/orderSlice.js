@@ -49,6 +49,18 @@ export const respondToOffer = createAsyncThunk(
   }
 );
 
+export const confirmPayment = createAsyncThunk(
+  'orders/confirmPayment',
+  async (orderId, { rejectWithValue }) => {
+    try {
+      const res = await api.patch(`/orders/${orderId}/confirm-payment`);
+      return res.data;
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || 'Failed to confirm payment');
+    }
+  }
+);
+
 export const updateOrderStatus = createAsyncThunk(
   'orders/updateOrderStatus',
   async ({ orderId, status, location, notes }, { rejectWithValue }) => {
@@ -101,8 +113,9 @@ const orderSlice = createSlice({
       })
       .addCase(fetchOrders.fulfilled, (state, action) => {
         state.loading = false;
-        state.orders = action.payload.orders || action.payload || [];
-        state.count = action.payload.count || (Array.isArray(action.payload) ? action.payload.length : (action.payload.orders ? action.payload.orders.length : 0));
+        const payload = action.payload;
+        state.orders = payload.data || payload.orders || [];
+        state.count  = payload.count || state.orders.length;
       })
       .addCase(fetchOrders.rejected, (state, action) => {
         state.loading = false;

@@ -38,6 +38,9 @@ const CorporateProfileSchema = new mongoose.Schema(
     registeredOffice: { type: PakistanAddressSchema, default: () => ({}) },
     isVerified:     { type: Boolean, default: false }, // Admin verifies corporate profile
     verifiedAt:     { type: Date, default: null },
+    businessType:     { type: String, trim: true, default: '' },
+    yearsInOperation: { type: String, trim: true, default: '' },
+    phone:            { type: String, trim: true, default: '' },
   },
   { _id: false }
 );
@@ -90,27 +93,20 @@ const UserSchema = new mongoose.Schema(
       select: false,
     },
 
-    /** Extended role enum — preserves all existing roles, adds Client & Super_Admin */
+    /** V2.0 Streamlined 3-role architecture: Client, Driver, Admin */
     role: {
       type: String,
-      enum: ['Fleet_Manager', 'Dispatcher', 'Driver', 'Accountant', 'Client', 'Super_Admin'],
+      enum: ['Client', 'Driver', 'Admin'],
       default: 'Driver',
       index: true,
     },
 
-    /* ── Internal staff fields (Driver / Dispatcher / Manager / Accountant) ── */
+    /* ── Driver / Staff fields ── */
     phone:         { type: String, trim: true, default: '' },
     licenseNumber: { type: String, trim: true, default: '' },
-    hourlyRate:    { type: Number, default: 25.0, min: [0, 'Hourly rate must be positive'] },
-    baseSalary:    { type: Number, default: 0,    min: [0, 'Base salary must be positive'] },
-    shiftType: {
-      type: String,
-      enum: ['Morning', 'Evening', 'Night', 'Long-Haul'],
-      default: 'Morning',
-    },
     status: {
       type: String,
-      enum: ['Active', 'On Duty', 'Off Duty', 'On Leave', 'Suspended'],
+      enum: ['Active', 'On Duty', 'Off Duty', 'Suspended'],
       default: 'Active',
       index: true,
     },

@@ -1,83 +1,94 @@
 const express = require('express');
-const router = express.Router();
+const router  = express.Router();
 const {
   register,
+  registerClient,
   login,
   getMe,
-  getStaffList,
-  updateStaffStatus,
+  getDrivers,
+  updateDriverStatus,
 } = require('../controllers/authController');
-const { protect } = require('../middleware/authMiddleware');
+const { protect }   = require('../middleware/authMiddleware');
 const { authorize } = require('../middleware/roleMiddleware');
 
 /**
  * @swagger
  * tags:
- *   name: Authentication & Staff
- *   description: Staff authentication, profile details, and role directory
+ *   name: Authentication
+ *   description: User authentication and account management for all 3 roles
  */
 
 /**
  * @swagger
  * /api/auth/register:
  *   post:
- *     summary: Register a new logistics staff member or driver
- *     tags: [Authentication & Staff]
+ *     summary: Register a new Driver account
+ *     tags: [Authentication]
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
  *             type: object
- *             required:
- *               - name
- *               - email
- *               - password
+ *             required: [name, email, password]
  *             properties:
- *               name:
- *                 type: string
- *               email:
- *                 type: string
- *               password:
- *                 type: string
- *               role:
- *                 type: string
- *                 enum: [Fleet_Manager, Dispatcher, Driver, Accountant]
- *               phone:
- *                 type: string
- *               licenseNumber:
- *                 type: string
- *               hourlyRate:
- *                 type: number
+ *               name: { type: string }
+ *               email: { type: string }
+ *               password: { type: string }
+ *               phone: { type: string }
+ *               licenseNumber: { type: string }
+ *               currentCity: { type: string }
+ *               currentProvince: { type: string }
  *     responses:
- *       201:
- *         description: User registered successfully
+ *       201: { description: Driver registered successfully }
  */
 router.post('/register', register);
 
 /**
  * @swagger
- * /api/auth/login:
+ * /api/auth/register-client:
  *   post:
- *     summary: Login staff member and retrieve JWT token
- *     tags: [Authentication & Staff]
+ *     summary: Register a new B2B Client account
+ *     tags: [Authentication]
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
  *             type: object
- *             required:
- *               - email
- *               - password
+ *             required: [name, email, password]
  *             properties:
- *               email:
- *                 type: string
- *               password:
- *                 type: string
+ *               name: { type: string }
+ *               email: { type: string }
+ *               password: { type: string }
+ *               corporateProfile:
+ *                 type: object
+ *                 properties:
+ *                   companyName: { type: string }
+ *                   ntn: { type: string }
  *     responses:
- *       200:
- *         description: Login successful with JWT token
+ *       201: { description: Client registered successfully }
+ */
+router.post('/register-client', registerClient);
+
+/**
+ * @swagger
+ * /api/auth/login:
+ *   post:
+ *     summary: Login (Client / Driver / Admin) and retrieve JWT
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email, password]
+ *             properties:
+ *               email: { type: string }
+ *               password: { type: string }
+ *     responses:
+ *       200: { description: Login successful with JWT token }
  */
 router.post('/login', login);
 
@@ -86,58 +97,40 @@ router.post('/login', login);
  * /api/auth/me:
  *   get:
  *     summary: Get current authenticated user profile
- *     tags: [Authentication & Staff]
- *     security:
- *       - bearerAuth: []
+ *     tags: [Authentication]
+ *     security: [{ bearerAuth: [] }]
  *     responses:
- *       200:
- *         description: Current user profile
+ *       200: { description: Current user profile }
  */
 router.get('/me', protect, getMe);
 
 /**
  * @swagger
- * /api/auth/staff:
+ * /api/auth/drivers:
  *   get:
- *     summary: List all staff members & drivers
- *     tags: [Authentication & Staff]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: query
- *         name: role
- *         schema:
- *           type: string
- *           enum: [All, Fleet_Manager, Dispatcher, Driver, Accountant]
- *       - in: query
- *         name: status
- *         schema:
- *           type: string
- *           enum: [All, Active, "On Duty", "Off Duty", "On Leave", Suspended]
+ *     summary: List all driver accounts (Admin only)
+ *     tags: [Authentication]
+ *     security: [{ bearerAuth: [] }]
  *     responses:
- *       200:
- *         description: List of staff
+ *       200: { description: List of drivers }
  */
-router.get('/staff', protect, getStaffList);
+router.get('/drivers', protect, authorize('Admin'), getDrivers);
 
 /**
  * @swagger
- * /api/auth/staff/{id}/status:
+ * /api/auth/drivers/{id}/status:
  *   patch:
- *     summary: Update staff status or wage rate
- *     tags: [Authentication & Staff]
- *     security:
- *       - bearerAuth: []
+ *     summary: Update driver status (Admin or self)
+ *     tags: [Authentication]
+ *     security: [{ bearerAuth: [] }]
  *     parameters:
  *       - in: path
  *         name: id
  *         required: true
- *         schema:
- *           type: string
+ *         schema: { type: string }
  *     responses:
- *       200:
- *         description: Status updated
+ *       200: { description: Status updated }
  */
-router.patch('/staff/:id/status', protect, updateStaffStatus);
+router.patch('/drivers/:id/status', protect, authorize('Admin', 'Driver'), updateDriverStatus);
 
 module.exports = router;

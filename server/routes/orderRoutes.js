@@ -1,9 +1,10 @@
 const express = require('express');
-const router = express.Router();
-const { protect } = require('../middleware/authMiddleware');
+const router  = express.Router();
+const { protect }   = require('../middleware/authMiddleware');
 const { authorize } = require('../middleware/roleMiddleware');
 const {
   createOrder,
+  confirmPayment,
   getOrders,
   getOrderById,
   driverConsentResponse,
@@ -13,11 +14,19 @@ const {
 
 router.use(protect);
 
-router.post('/', authorize('Client'), createOrder);
-router.get('/', authorize('Client', 'Driver', 'Fleet_Manager', 'Dispatcher', 'Accountant', 'Super_Admin'), getOrders);
-router.get('/:id', authorize('Client', 'Driver', 'Fleet_Manager', 'Dispatcher', 'Accountant', 'Super_Admin'), getOrderById);
-router.patch('/:id/driver-response', authorize('Driver'), driverConsentResponse);
-router.patch('/:id/status', authorize('Driver', 'Dispatcher', 'Fleet_Manager', 'Super_Admin'), updateOrderStatus);
-router.patch('/:id/cancel', authorize('Client', 'Fleet_Manager', 'Super_Admin'), cancelOrder);
+// Client: place order, view own orders
+router.post('/',                authorize('Client'),                    createOrder);
+router.patch('/:id/confirm-payment', authorize('Client'),              confirmPayment);
+router.get('/',                 authorize('Client', 'Driver', 'Admin'), getOrders);
+router.get('/:id',              authorize('Client', 'Driver', 'Admin'), getOrderById);
+
+// Driver: accept or decline broadcast trip
+router.patch('/:id/driver-response', authorize('Driver'),              driverConsentResponse);
+
+// Driver / Admin: update transit status
+router.patch('/:id/status',     authorize('Driver', 'Admin'),          updateOrderStatus);
+
+// Client / Admin: cancel order
+router.patch('/:id/cancel',     authorize('Client', 'Admin'),          cancelOrder);
 
 module.exports = router;

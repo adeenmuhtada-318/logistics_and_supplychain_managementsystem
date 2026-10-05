@@ -1,162 +1,152 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate, Link } from 'react-router-dom';
-import { registerUser, clearAuthError } from '../features/auth/authSlice';
-import { Truck, Lock, Mail, User, Phone, Award, UserPlus } from 'lucide-react';
+import { registerDriver, clearAuthError } from '../features/auth/authSlice';
+import { Truck, Lock, Mail, User, Phone, Award, UserPlus, AlertCircle } from 'lucide-react';
+
+/* ─── Design tokens (inline — no Tailwind dependency) ────────────────────── */
+const BG    = '#0E0E0E';
+const CARD  = '#161616';
+const BORD  = '#2A2A2A';
+const DIM   = '#9AA3A8';
+const BLUE  = '#448AFF';
+
+const AuthInput = ({ icon: Icon, ...props }) => (
+  <div style={{ position: 'relative' }}>
+    {Icon && <Icon size={14} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: DIM, pointerEvents: 'none' }} />}
+    <input
+      {...props}
+      style={{
+        width: '100%', boxSizing: 'border-box', height: '40px',
+        paddingLeft: Icon ? '36px' : '12px', paddingRight: '12px',
+        background: '#1A1A1A', border: `1px solid ${BORD}`,
+        borderRadius: '8px', color: '#E0E0E0', fontSize: '13px',
+        fontFamily: "'Inter', system-ui, sans-serif", outline: 'none', transition: 'border-color 0.15s',
+      }}
+      onFocus={(e) => { e.target.style.borderColor = BLUE + '88'; }}
+      onBlur={(e)  => { e.target.style.borderColor = BORD; }}
+    />
+  </div>
+);
+
+const FieldLabel = ({ children }) => (
+  <label style={{ display: 'block', fontSize: '10px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: DIM, marginBottom: '6px', fontFamily: 'monospace' }}>
+    {children}
+  </label>
+);
 
 export const RegisterPage = () => {
-  const dispatch = useDispatch();
-  const navigate = useNavigate();
-  const { isAuthenticated, loading, error } = useSelector((state) => state.auth);
+  const dispatch  = useDispatch();
+  const navigate  = useNavigate();
+  const { isAuthenticated, loading, error } = useSelector((s) => s.auth);
 
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    password: '',
-    role: 'Driver',
-    phone: '',
-    licenseNumber: '',
-    hourlyRate: 30.0,
-    shiftType: 'Morning',
+  const [form, setForm] = useState({
+    name: '', email: '', password: '',
+    phone: '', licenseNumber: '', currentCity: '', currentProvince: '',
   });
 
+  // Drivers always land on /driver/terminal after register
   useEffect(() => {
-    if (isAuthenticated) navigate('/dashboard');
+    if (isAuthenticated) navigate('/driver/terminal', { replace: true });
   }, [isAuthenticated, navigate]);
 
-  useEffect(() => {
-    dispatch(clearAuthError());
-  }, [dispatch]);
+  useEffect(() => { dispatch(clearAuthError()); }, [dispatch]);
 
   const handleChange = useCallback((e) => {
-    setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+    setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
   }, []);
 
   const handleSubmit = useCallback(async (e) => {
     e.preventDefault();
-    await dispatch(registerUser(formData));
-  }, [dispatch, formData]);
-
-  const inputCls = 'h-9 w-full rounded-md border border-[var(--input-border)] bg-[var(--input-bg)] px-3 text-sm text-[var(--text-primary)] placeholder:text-coolgray focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 transition-colors duration-150';
-  const labelCls = 'block text-xs font-medium text-[var(--text-secondary)] mb-1';
-  const selectCls = 'h-9 w-full rounded-md border border-[var(--input-border)] bg-[var(--input-bg)] px-3 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 transition-colors duration-150';
+    await dispatch(registerDriver(form));
+  }, [dispatch, form]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-[var(--bg-page)] transition-colors duration-150">
-      <div className="w-full max-w-lg space-y-5">
+    <div style={{ minHeight: '100vh', background: BG, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px', fontFamily: "'Inter', system-ui, sans-serif" }}>
+      <div style={{ width: '100%', maxWidth: '460px' }}>
+
         {/* Brand */}
-        <div className="text-center space-y-1.5">
-          <div className="inline-flex p-2.5 rounded-md bg-brand-500 text-white">
-            <Truck className="w-7 h-7" />
+        <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+          <div style={{ display: 'inline-flex', padding: '12px', borderRadius: '14px', background: BLUE + '18', border: `1px solid ${BLUE}30`, marginBottom: '14px' }}>
+            <Truck size={28} style={{ color: BLUE }} />
           </div>
-          <h1 className="text-xl font-bold text-[var(--text-primary)]">
-            Register Staff Profile
-          </h1>
-          <p className="text-xs text-[var(--text-secondary)]">
-            Onboard Drivers, Dispatchers, and Logistics Staff
+          <h1 style={{ margin: 0, fontSize: '20px', fontWeight: 800, color: '#E0E0E0' }}>Driver Sign-Up</h1>
+          <p style={{ margin: '6px 0 0', fontSize: '12px', color: DIM, fontFamily: 'monospace' }}>
+            Register as a Rider to receive delivery trips
           </p>
         </div>
 
         {/* Form */}
-        <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-md p-5 transition-colors duration-150">
-          <form onSubmit={handleSubmit} className="space-y-4">
+        <div style={{ background: CARD, border: `1px solid ${BORD}`, borderRadius: '10px', padding: '22px' }}>
+          <form onSubmit={handleSubmit}>
             {error && (
-              <div className="p-2.5 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md text-xs text-red-700 dark:text-red-400 font-medium">
-                {error}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 12px', marginBottom: '14px', background: 'rgba(255,82,82,0.08)', border: '1px solid rgba(255,82,82,0.25)', borderRadius: '7px' }}>
+                <AlertCircle size={13} style={{ color: '#FF5252' }} />
+                <span style={{ fontSize: '12px', color: '#FF5252', fontFamily: 'monospace' }}>{error}</span>
               </div>
             )}
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
               <div>
-                <label className={labelCls}>Full Name</label>
-                <div className="relative">
-                  <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-coolgray" />
-                  <input name="name" placeholder="Robert Vance" value={formData.name} onChange={handleChange} required className={`${inputCls} pl-9`} />
-                </div>
+                <FieldLabel>Full Name *</FieldLabel>
+                <AuthInput icon={User} name="name" placeholder="Your full name" value={form.name} onChange={handleChange} required />
               </div>
               <div>
-                <label className={labelCls}>Email Address</label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-coolgray" />
-                  <input type="email" name="email" placeholder="robert@logistics.local" value={formData.email} onChange={handleChange} required className={`${inputCls} pl-9`} />
-                </div>
+                <FieldLabel>Mobile Number</FieldLabel>
+                <AuthInput icon={Phone} name="phone" type="tel" placeholder="03XX-XXXXXXX" value={form.phone} onChange={handleChange} />
               </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className={labelCls}>Password (min 6)</label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-coolgray" />
-                  <input type="password" name="password" placeholder="••••••••" value={formData.password} onChange={handleChange} required className={`${inputCls} pl-9`} />
-                </div>
+              <div style={{ gridColumn: '1 / -1' }}>
+                <FieldLabel>Email Address *</FieldLabel>
+                <AuthInput icon={Mail} name="email" type="email" placeholder="driver@email.com" value={form.email} onChange={handleChange} required />
+              </div>
+              <div style={{ gridColumn: '1 / -1' }}>
+                <FieldLabel>Password *</FieldLabel>
+                <AuthInput icon={Lock} name="password" type="password" placeholder="Min. 6 characters" value={form.password} onChange={handleChange} required />
               </div>
               <div>
-                <label className={labelCls}>Organization Role</label>
-                <select name="role" value={formData.role} onChange={handleChange} className={selectCls}>
-                  <option value="Driver">Commercial Driver</option>
-                  <option value="Dispatcher">Freight Dispatcher</option>
-                  <option value="Accountant">Financial Accountant</option>
-                  <option value="Fleet_Manager">Fleet Manager</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className={labelCls}>Phone Number</label>
-                <div className="relative">
-                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-coolgray" />
-                  <input name="phone" placeholder="+1 (555) 000-0000" value={formData.phone} onChange={handleChange} className={`${inputCls} pl-9`} />
-                </div>
+                <FieldLabel>License Number</FieldLabel>
+                <AuthInput icon={Award} name="licenseNumber" placeholder="e.g. PB-123456" value={form.licenseNumber} onChange={handleChange} />
               </div>
               <div>
-                <label className={labelCls}>CDL / License #</label>
-                <div className="relative">
-                  <Award className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-coolgray" />
-                  <input name="licenseNumber" placeholder="CDL-A-123456" value={formData.licenseNumber} onChange={handleChange} className={`${inputCls} pl-9`} />
-                </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className={labelCls}>Hourly Rate ($/hr)</label>
-                <input type="number" name="hourlyRate" value={formData.hourlyRate} onChange={handleChange} step="0.5" min={0} className={inputCls} />
+                <FieldLabel>Current City</FieldLabel>
+                <AuthInput name="currentCity" placeholder="e.g. Lahore" value={form.currentCity} onChange={handleChange} />
               </div>
               <div>
-                <label className={labelCls}>Assigned Shift</label>
-                <select name="shiftType" value={formData.shiftType} onChange={handleChange} className={selectCls}>
-                  <option value="Morning">Morning</option>
-                  <option value="Evening">Evening</option>
-                  <option value="Night">Night</option>
-                  <option value="Long-Haul">Long-Haul</option>
-                </select>
+                <FieldLabel>Province</FieldLabel>
+                <AuthInput name="currentProvince" placeholder="e.g. Punjab" value={form.currentProvince} onChange={handleChange} />
               </div>
             </div>
 
             <button
               type="submit"
+              id="driver-register-btn"
               disabled={loading}
-              className="w-full h-9 rounded-md bg-brand-500 hover:bg-brand-600 text-white text-sm font-semibold flex items-center justify-center gap-2 transition-colors duration-150 disabled:opacity-50"
+              style={{
+                width: '100%', height: '42px', borderRadius: '8px', border: 'none',
+                background: loading ? '#1A1A1A' : `linear-gradient(135deg, ${BLUE}, #1565C0)`,
+                color: loading ? DIM : '#fff', fontWeight: 800, fontSize: '13px',
+                cursor: loading ? 'not-allowed' : 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '7px',
+                transition: 'all 0.2s',
+              }}
             >
               {loading ? (
-                <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/></svg>
+                <><span style={{ animation: 'spin 0.8s linear infinite', display: 'inline-block' }}>⚙</span> Creating account…</>
               ) : (
-                <UserPlus className="w-4 h-4" />
+                <><UserPlus size={15} /> Create Driver Account</>
               )}
-              Create Account
             </button>
           </form>
 
-          <div className="mt-4 text-center text-xs text-[var(--text-secondary)]">
+          <div style={{ marginTop: '14px', textAlign: 'center', fontSize: '12px', color: DIM }}>
             Already have an account?{' '}
-            <Link to="/login" className="font-semibold text-brand-500 hover:text-brand-600 transition-colors duration-150">
-              Sign In
-            </Link>
+            <Link to="/login" style={{ color: BLUE, fontWeight: 700, textDecoration: 'none' }}>Sign In</Link>
+            {' '}·{' '}
+            <Link to="/client/register" style={{ color: '#00E676', fontWeight: 700, textDecoration: 'none' }}>Register as Client</Link>
           </div>
         </div>
       </div>
+      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 };

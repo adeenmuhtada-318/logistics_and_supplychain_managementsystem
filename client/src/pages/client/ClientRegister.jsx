@@ -1,5 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useDispatch } from 'react-redux';
+import { registerClient } from '../../features/auth/authSlice';
 import {
   Building2,
   User,
@@ -217,6 +219,7 @@ const SectionHead = ({ icon: Icon, label, accent = '#00E676' }) => (
 /* ─── Main Component ─────────────────────────────────────────────────────── */
 export const ClientRegister = () => {
   const navigate = useNavigate();
+  const dispatch = useDispatch();
 
   const [form, setForm] = useState({
     companyName: '',
@@ -232,9 +235,10 @@ export const ClientRegister = () => {
     yearsInOperation: '',
   });
 
-  const [errors, setErrors] = useState({});
-  const [submitted, setSubmitted] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [errors,    setErrors]    = useState({});
+  const [submitted,  setSubmitted]  = useState(false);
+  const [loading,    setLoading]    = useState(false);
+  const [apiError,   setApiError]   = useState('');
 
   const cities = form.province ? Object.keys(PK_LOCATIONS[form.province] || {}) : [];
   const areas = form.province && form.city ? PK_LOCATIONS[form.province]?.[form.city] || [] : [];
@@ -270,9 +274,38 @@ export const ClientRegister = () => {
     const errs = validate();
     if (Object.keys(errs).length) { setErrors(errs); return; }
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 1200));
+    setApiError('');
+
+    // Map the corporate form data to the API payload
+    const payload = {
+      name:     form.ownerName,
+      email:    form.email,
+      password: form.password || 'FleetCore@2024', // use collected password if field added
+      corporateProfile: {
+        companyName:      form.companyName,
+        ownerName:        form.ownerName,
+        ntn:              form.ntn,
+        contactPhone:     form.phone,
+        businessType:     form.businessType,
+        yearsInOperation: form.yearsInOperation,
+        registeredOffice: {
+          province:      form.province,
+          city:          form.city,
+          area:          form.area,
+          street:        form.streetAddress,
+        },
+      },
+    };
+
+    const result = await dispatch(registerClient(payload));
     setLoading(false);
-    setSubmitted(true);
+
+    if (registerClient.fulfilled.match(result)) {
+      setSubmitted(true);
+      setTimeout(() => navigate('/client/dashboard'), 2000);
+    } else {
+      setApiError(result.payload || 'Registration failed. Please try again.');
+    }
   };
 
   /* ── Success Screen ─────────────────────────────────────────────────── */
@@ -695,6 +728,17 @@ export const ClientRegister = () => {
             </div>
 
             {/* Submit */}
+            {apiError && (
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: '8px',
+                padding: '10px 12px', marginBottom: '14px',
+                background: 'rgba(255,82,82,0.08)', border: '1px solid rgba(255,82,82,0.25)',
+                borderRadius: '7px',
+              }}>
+                <AlertCircle size={13} style={{ color: '#FF5252' }} />
+                <span style={{ fontSize: '12px', color: '#FF5252', fontFamily: 'monospace' }}>{apiError}</span>
+              </div>
+            )}
             <button
               type="submit"
               disabled={loading}

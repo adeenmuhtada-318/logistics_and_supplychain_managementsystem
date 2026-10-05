@@ -42,6 +42,7 @@ const OrderCheckpointSchema = new mongoose.Schema(
         'Out for Delivery',
         'Delivered',
         'Cancelled',
+        'Expired',
         'Incident',
       ],
     },
@@ -105,6 +106,11 @@ const OrderSchema = new mongoose.Schema(
     },
     specialInstructions: { type: String, default: '' },
 
+    /* ── Contact Details (required at order placement) ── */
+    contactPersonName: { type: String, trim: true, default: '' },
+    contactMobile:     { type: String, trim: true, default: '' },
+    companyNtn:        { type: String, trim: true, default: '' },
+
     /* ── Locations (Pakistan-aware) ── */
     pickup:  { type: LocationPointSchema, required: true },
     dropoff: { type: LocationPointSchema, required: true },
@@ -149,15 +155,17 @@ const OrderSchema = new mongoose.Schema(
     status: {
       type: String,
       enum: [
-        'Pending-Fare-Estimate',   // just placed, mapping service running
-        'Pending-Driver-Consent',  // fare computed, matching done, awaiting driver accept
-        'Driver-Accepted',         // driver accepted, vehicle en route to pickup
-        'Picked-Up',               // cargo collected from client site
-        'In-Transit',              // vehicle on road to destination
-        'At-Stop',                 // intermediate checkpoint
-        'Delivered',               // successfully delivered
-        'Cancelled',               // cancelled by client or admin
-        'Incident',                // incident reported mid-transit
+        'Pending-Fare-Estimate',    // just placed, mapping service running
+        'Pending-Payment',          // fare computed, awaiting client payment confirmation
+        'Pending-Driver-Consent',   // payment confirmed, broadcasting to drivers
+        'Driver-Accepted',          // driver accepted, vehicle en route to pickup
+        'Picked-Up',                // cargo collected from client site
+        'In-Transit',               // vehicle on road to destination
+        'At-Stop',                  // intermediate checkpoint
+        'Delivered',                // successfully delivered
+        'Cancelled',                // cancelled by client or admin
+        'Expired',                  // no driver accepted within 72 hours
+        'Incident',                 // incident reported mid-transit
       ],
       default: 'Pending-Fare-Estimate',
       index: true,
@@ -180,15 +188,18 @@ const OrderSchema = new mongoose.Schema(
     /* ── Payment ── */
     paymentStatus: {
       type: String,
-      enum: ['Unpaid', 'Invoice-Sent', 'Paid', 'Refunded'],
+      enum: ['Unpaid', 'Confirmed-Payment', 'Paid', 'Refunded'],
       default: 'Unpaid',
     },
     paymentMethod: {
       type: String,
-      enum: ['Bank Transfer', 'Cheque', 'Online', 'Cash on Delivery', 'Credit'],
-      default: 'Bank Transfer',
+      enum: ['Dummy-Bypass', 'Bank Transfer', 'Cheque', 'Online', 'Cash on Delivery', 'Credit'],
+      default: 'Dummy-Bypass',
     },
     paidAt: { type: Date, default: null },
+
+    /* ── 72-Hour Expiry ── */
+    expiresAt: { type: Date, default: null, index: true },
 
     /* ── Timestamps ── */
     requestedAt:     { type: Date, default: Date.now },
