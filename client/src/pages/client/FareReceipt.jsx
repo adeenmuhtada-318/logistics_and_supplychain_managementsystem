@@ -1,11 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import {
   CheckCircle2, MapPin, Package, Ruler, Clock, DollarSign,
   CreditCard, Copy, ArrowRight, AlertCircle, Truck, Banknote,
+  ArrowLeft,
 } from 'lucide-react';
-import { confirmPayment } from '../../features/orders/orderSlice';
+import { confirmPayment, fetchOrders, clearOrderError } from '../../features/orders/orderSlice';
+import { calculateFare } from './PlaceOrder';
 
 /* ─── Design Tokens ──────────────────────────────────────────────────────── */
 const ACCENT  = '#00E676';
@@ -44,16 +46,38 @@ export const FareReceipt = () => {
   const { state }   = useLocation();
   const navigate    = useNavigate();
   const dispatch    = useDispatch();
-  const { submitting, error: paymentError } = useSelector((s) => s.orders);
+  const { submitting, error: paymentError, selectedOrder } = useSelector((s) => s.orders);
 
-  const order = state?.order;
+  const order = state?.order || selectedOrder;
+  const orderId = state?.orderId || order?._id;
+  const pickupCity = state?.pickupCity || order?.pickup?.city;
+  const dropoffCity = state?.dropoffCity || order?.dropoff?.city;
+  const weightKg = Number(state?.cargoWeight ?? order?.cargoWeightKg ?? 0);
+  const transitHours = Number(state?.transitHours ?? (Number(order?.calculatedDistanceKm) > 0 ? Math.max(1, Math.round(Number(order.calculatedDistanceKm) / 60)) : 0));
+  const calculatedFare = useMemo(() => {
+    if (!order) return null;
+    return order.fareBreakdown?.totalFare > 0
+      ? order.fareBreakdown
+      : calculateFare({
+        pickupCity,
+        dropoffCity,
+        cargoWeightKg: weightKg,
+        priority: order.priority,
+      });
+  }, [order, pickupCity, dropoffCity, weightKg]);
   const [copied,   setCopied]   = useState(false);
   const [confirmed, setConfirmed] = useState(false);
+  const [localError, setLocalError] = useState('');
+
+  useEffect(() => {
+    dispatch(clearOrderError());
+  }, [dispatch]);
 
   if (!order) {
     return (
       <div style={{ minHeight: '100vh', background: BG_MAIN, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Inter', system-ui, sans-serif" }}>
         <div style={{ textAlign: 'center', color: DIM }}>
+          <button onClick={() => navigate(-1)} aria-label="Go back" style={{ background: 'transparent', border: `1px solid ${BORDER}`, borderRadius: '6px', padding: '7px', color: DIM, cursor: 'pointer', display: 'inline-flex', marginBottom: '12px' }}><ArrowLeft size={14} /></button>
           <AlertCircle size={40} style={{ marginBottom: '12px' }} />
           <p>No order data found. <button onClick={() => navigate('/client/place-order')} style={{ color: ACCENT, background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>Place a new order</button></p>
         </div>
@@ -61,10 +85,10 @@ export const FareReceipt = () => {
     );
   }
 
-  const fb = order.fareBreakdown || {};
-  const distKm    = order.calculatedDistanceKm?.toFixed(1) || '—';
-  const durHrs    = order.calculatedDurationHours ? (order.calculatedDurationHours * 60).toFixed(0) : '—';
-  const totalFare = order.estimatedFarePKR?.toLocaleString('en-PK') || '—';
+  const fb = calculatedFare || {};
+  const distanceKm = Number(order.calculatedDistanceKm) > 0 ? Number(order.calculatedDistanceKm) : (calculatedFare?.distanceKm || 0);
+  const distKm    = distanceKm > 0 ? distanceKm.toFixed(1) : '—';
+  const totalFare = Number(fb.totalFare || order.estimatedFarePKR || 0);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(DUMMY_ACCOUNT.accountNumber);
@@ -73,16 +97,29 @@ export const FareReceipt = () => {
   };
 
   const handleConfirmPayment = async () => {
-    const result = await dispatch(confirmPayment(order._id));
+    if (submitting || confirmed) return;
+    if (!orderId) {
+      setLocalError('This order has no database ID. Please place the order again.');
+      return;
+    }
+    setLocalError('');
+    const result = await dispatch(confirmPayment(orderId));
     if (confirmPayment.fulfilled.match(result)) {
       setConfirmed(true);
-      setTimeout(() => navigate('/client/dashboard'), 2500);
+      dispatch(fetchOrders());
+      setTimeout(() => navigate('/client/dashboard', { replace: true }), 1500);
+    } else {
+      setLocalError(result.payload || 'Payment confirmation failed. Please try again.');
     }
   };
 
   return (
     <div style={{ minHeight: '100vh', background: BG_MAIN, padding: '28px 20px', fontFamily: "'Inter', system-ui, sans-serif" }}>
       <div style={{ maxWidth: '560px', margin: '0 auto' }}>
+
+        <button onClick={() => navigate(-1)} style={{ background: 'transparent', border: `1px solid ${BORDER}`, borderRadius: '6px', padding: '6px 10px', color: DIM, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', marginBottom: '16px' }}>
+          <ArrowLeft size={12} /> Back
+        </button>
 
         {/* Header */}
         <div style={{ textAlign: 'center', marginBottom: '24px' }}>
@@ -97,7 +134,7 @@ export const FareReceipt = () => {
             Auto-Calculated Fare Receipt
           </h1>
           <p style={{ margin: '6px 0 0', fontSize: '12px', color: DIM, fontFamily: 'monospace' }}>
-            Order #{order.orderNumber}
+            Order ID: {orderId || order.orderNumber || 'Unavailable'}
           </p>
         </div>
 
@@ -113,7 +150,7 @@ export const FareReceipt = () => {
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: '10px', color: DIM, fontFamily: 'monospace', marginBottom: '3px' }}>PICKUP</div>
               <div style={{ fontSize: '13px', color: '#E0E0E0', fontWeight: 600 }}>
-                {order.pickup?.city}, {order.pickup?.province}
+                {pickupCity}, {order.pickup?.province}
               </div>
               <div style={{ fontSize: '11px', color: DIM }}>{order.pickup?.streetAddress}</div>
             </div>
@@ -121,7 +158,7 @@ export const FareReceipt = () => {
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: '10px', color: DIM, fontFamily: 'monospace', marginBottom: '3px' }}>DROP-OFF</div>
               <div style={{ fontSize: '13px', color: '#E0E0E0', fontWeight: 600 }}>
-                {order.dropoff?.city}, {order.dropoff?.province}
+                {dropoffCity}, {order.dropoff?.province}
               </div>
               <div style={{ fontSize: '11px', color: DIM }}>{order.dropoff?.streetAddress}</div>
             </div>
@@ -146,7 +183,7 @@ export const FareReceipt = () => {
               <Clock size={12} style={{ color: '#FFB300' }} />
               <div>
                 <div style={{ fontSize: '9px', color: DIM, fontFamily: 'monospace' }}>EST. TRANSIT</div>
-                <div style={{ fontSize: '14px', fontWeight: 700, color: '#FFB300', fontFamily: 'monospace' }}>{durHrs} min</div>
+                <div style={{ fontSize: '14px', fontWeight: 700, color: '#FFB300', fontFamily: 'monospace' }}>{transitHours > 0 ? transitHours : '—'} hr</div>
               </div>
             </div>
             <div style={{
@@ -157,7 +194,7 @@ export const FareReceipt = () => {
               <Package size={12} style={{ color: '#E040FB' }} />
               <div>
                 <div style={{ fontSize: '9px', color: DIM, fontFamily: 'monospace' }}>WEIGHT</div>
-                <div style={{ fontSize: '14px', fontWeight: 700, color: '#E040FB', fontFamily: 'monospace' }}>{order.cargoWeightKg} kg</div>
+                <div style={{ fontSize: '14px', fontWeight: 700, color: '#E040FB', fontFamily: 'monospace' }}>{weightKg > 0 ? weightKg : '—'} kg</div>
               </div>
             </div>
           </div>
@@ -186,7 +223,7 @@ export const FareReceipt = () => {
           <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: `1px solid ${BORDER}` }}>
             <ReceiptRow
               label="TOTAL ESTIMATED FARE"
-              value={`₨ ${Number(order.estimatedFarePKR || 0).toLocaleString('en-PK')}`}
+              value={`₨ ${totalFare.toLocaleString('en-PK')}`}
               accent={ACCENT}
               mono
             />
@@ -255,24 +292,25 @@ export const FareReceipt = () => {
             }}>
               <Banknote size={13} style={{ color: '#FF9800', flexShrink: 0, marginTop: '1px' }} />
               <p style={{ margin: 0, fontSize: '11px', color: '#FF9800', fontFamily: 'monospace', lineHeight: 1.5 }}>
-                Transfer <strong>₨ {Number(order.estimatedFarePKR || 0).toLocaleString('en-PK')}</strong> to the above account.
+                Transfer <strong>₨ {totalFare.toLocaleString('en-PK')}</strong> to the above account.
                 Once sent, click <strong>Confirm Payment</strong> to dispatch your order to available riders.
                 <br /><em style={{ opacity: 0.75 }}>Note: This is a demo payment bypass — no live gateway is integrated.</em>
               </p>
             </div>
 
-            {paymentError && (
+            {(localError || paymentError) && (
               <div style={{
                 background: 'rgba(255,82,82,0.08)', border: '1px solid rgba(255,82,82,0.25)',
                 borderRadius: '7px', padding: '10px 12px', marginBottom: '12px',
                 display: 'flex', alignItems: 'center', gap: '8px',
               }}>
                 <AlertCircle size={13} style={{ color: '#FF5252' }} />
-                <span style={{ fontSize: '11px', color: '#FF5252', fontFamily: 'monospace' }}>{paymentError}</span>
+                <span style={{ fontSize: '11px', color: '#FF5252', fontFamily: 'monospace' }}>{localError || paymentError}</span>
               </div>
             )}
 
             <button
+              type="button"
               onClick={handleConfirmPayment}
               disabled={submitting}
               style={{

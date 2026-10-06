@@ -33,7 +33,8 @@ async function getActivePricingConfig() {
 async function calculateFare({ distanceKm, cargoWeightKg, priority = 'Standard', cargoType = '' }) {
     const config = await getActivePricingConfig();
     
-    const multipliers = config.priorityMultipliers || DEFAULT_CONFIG.priorityMultipliers;
+    let multipliers = config.priorityMultipliers || DEFAULT_CONFIG.priorityMultipliers;
+    if (multipliers instanceof Map) multipliers = Object.fromEntries(multipliers);
     const priorityMultiplier = multipliers[priority] || 1.0;
     
     let ratePerKm = 0;
@@ -54,27 +55,28 @@ async function calculateFare({ distanceKm, cargoWeightKg, priority = 'Standard',
     const weightSurcharge = 0; // factored into ratePerKm selection by weight
     const priorityPremium = baseFare * (priorityMultiplier - 1.0);
     
+    const hazardousAmount = config.hazardousSurchargeAmount ?? config.hazardousSurchargePKR ?? DEFAULT_CONFIG.hazardousSurchargeAmount;
     let hazardousSurcharge = 0;
     if (typeof cargoType === 'string' && cargoType.toLowerCase().includes('hazardous')) {
-        hazardousSurcharge = config.hazardousSurchargeAmount || DEFAULT_CONFIG.hazardousSurchargeAmount;
+        hazardousSurcharge = hazardousAmount;
     } else if (Array.isArray(cargoType) && cargoType.some(t => t.toLowerCase().includes('hazardous'))) {
-        hazardousSurcharge = config.hazardousSurchargeAmount || DEFAULT_CONFIG.hazardousSurchargeAmount;
+        hazardousSurcharge = hazardousAmount;
     }
     
     const subtotal = baseFare + priorityPremium + weightSurcharge + hazardousSurcharge;
     const serviceFeePercent = config.serviceFeePercent ?? DEFAULT_CONFIG.serviceFeePercent;
     const serviceFee = subtotal * (serviceFeePercent / 100);
     
-    const minFare = config.minimumFare ?? DEFAULT_CONFIG.minimumFare;
+    const minFare = config.minimumFare ?? config.minimumFarePKR ?? DEFAULT_CONFIG.minimumFare;
     const calculatedTotal = subtotal + serviceFee;
-    const totalFare = Math.max(minFare, calculatedTotal);
+    const totalFare = Math.round(Math.max(minFare, calculatedTotal));
     
     return {
-        baseFare,
-        weightSurcharge,
-        priorityPremium,
-        serviceFee,
-        hazardousSurcharge,
+        baseFare: Math.round(baseFare),
+        weightSurcharge: Math.round(weightSurcharge),
+        priorityPremium: Math.round(priorityPremium),
+        serviceFee: Math.round(serviceFee),
+        hazardousSurcharge: Math.round(hazardousSurcharge),
         totalFare,
         currency: 'PKR',
         distanceKm,

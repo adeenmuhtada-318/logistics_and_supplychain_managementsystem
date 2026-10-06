@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDispatch } from 'react-redux';
 import { registerClient } from '../../features/auth/authSlice';
@@ -12,6 +12,7 @@ import {
   ChevronRight,
   CheckCircle2,
   AlertCircle,
+  ArrowLeft,
 } from 'lucide-react';
 
 /* ─── Pakistan Cascading Location Data ──────────────────────────────────── */
@@ -189,6 +190,47 @@ const CNSelect = ({ icon: Icon, error, children, ...props }) => (
   </div>
 );
 
+const SearchableCNSelect = ({ icon: Icon, name, value, options, placeholder, disabled, error, onChange }) => {
+  const [query, setQuery] = useState(value);
+  const [open, setOpen] = useState(false);
+  const filtered = options.filter((option) => option.toLowerCase().includes(query.toLowerCase()));
+
+  useEffect(() => setQuery(value), [value]);
+
+  const choose = (option) => {
+    setQuery(option);
+    setOpen(false);
+    onChange({ target: { name, value: option } });
+  };
+
+  const acceptExactMatch = (inputValue) => {
+    const exactMatch = options.find((option) => option.toLowerCase() === inputValue.trim().toLowerCase());
+    if (exactMatch) choose(exactMatch);
+  };
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <CNInput
+        icon={Icon}
+        value={query}
+        placeholder={placeholder}
+        disabled={disabled}
+        error={error}
+        onFocus={() => setOpen(true)}
+        onChange={(event) => { setQuery(event.target.value); setOpen(true); if (!event.target.value) onChange({ target: { name, value: '' } }); else acceptExactMatch(event.target.value); }}
+        onBlur={() => setTimeout(() => { acceptExactMatch(query); setOpen(false); }, 150)}
+      />
+      {open && !disabled && (
+        <div style={{ position: 'absolute', zIndex: 5, top: 'calc(100% + 4px)', left: 0, right: 0, maxHeight: '170px', overflowY: 'auto', background: '#1A1A1A', border: '1px solid #2A2A2A', borderRadius: '6px' }}>
+          {filtered.length ? filtered.map((option) => (
+            <button key={option} type="button" onMouseDown={() => choose(option)} style={{ display: 'block', width: '100%', border: 'none', background: 'transparent', color: '#E0E0E0', padding: '9px 12px', textAlign: 'left', cursor: 'pointer', fontSize: '12px' }}>{option}</button>
+          )) : <div style={{ padding: '9px 12px', color: '#9AA3A8', fontSize: '12px' }}>No matches</div>}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const SectionHead = ({ icon: Icon, label, accent = '#00E676' }) => (
   <div
     style={{
@@ -333,6 +375,9 @@ export const ClientRegister = () => {
             textAlign: 'center',
           }}
         >
+          <button onClick={() => navigate(-1)} aria-label="Go back" style={{ position: 'absolute', top: '20px', left: '20px', background: 'transparent', border: '1px solid #2A2A2A', borderRadius: '6px', padding: '7px', color: '#9AA3A8', cursor: 'pointer', display: 'flex' }}>
+            <ArrowLeft size={14} />
+          </button>
           <div
             style={{
               width: '56px',
@@ -411,6 +456,10 @@ export const ClientRegister = () => {
       }}
     >
       <div style={{ maxWidth: '780px', margin: '0 auto' }}>
+
+        <button onClick={() => navigate(-1)} aria-label="Go back" style={{ background: 'transparent', border: '1px solid #2A2A2A', borderRadius: '6px', padding: '7px', color: '#9AA3A8', cursor: 'pointer', display: 'flex', marginBottom: '16px' }}>
+          <ArrowLeft size={14} />
+        </button>
 
         {/* Header */}
         <div style={{ marginBottom: '28px' }}>
@@ -639,54 +688,43 @@ export const ClientRegister = () => {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '14px', marginBottom: '14px' }}>
                   <div>
                     <CNLabel>Province / Territory *</CNLabel>
-                    <CNSelect
+                    <SearchableCNSelect
                       icon={MapPin}
                       name="province"
                       value={form.province}
+                      options={Object.keys(PK_LOCATIONS)}
+                      placeholder="Search province…"
                       onChange={handleChange}
                       error={errors.province}
-                    >
-                      <option value="">Select province&hellip;</option>
-                      {Object.keys(PK_LOCATIONS).map((p) => (
-                        <option key={p}>{p}</option>
-                      ))}
-                    </CNSelect>
+                    />
                   </div>
 
                   <div>
                     <CNLabel>City *</CNLabel>
-                    <CNSelect
+                    <SearchableCNSelect
                       icon={MapPin}
                       name="city"
                       value={form.city}
+                      options={cities}
+                      placeholder="Search city…"
                       onChange={handleChange}
                       disabled={!form.province}
                       error={errors.city}
-                      style={{ opacity: !form.province ? 0.45 : 1 }}
-                    >
-                      <option value="">Select city&hellip;</option>
-                      {cities.map((c) => (
-                        <option key={c}>{c}</option>
-                      ))}
-                    </CNSelect>
+                    />
                   </div>
 
                   <div>
                     <CNLabel>Area / Locality *</CNLabel>
-                    <CNSelect
+                    <SearchableCNSelect
                       icon={MapPin}
                       name="area"
                       value={form.area}
+                      options={areas}
+                      placeholder="Search area…"
                       onChange={handleChange}
                       disabled={!form.city}
                       error={errors.area}
-                      style={{ opacity: !form.city ? 0.45 : 1 }}
-                    >
-                      <option value="">Select area&hellip;</option>
-                      {areas.map((a) => (
-                        <option key={a}>{a}</option>
-                      ))}
-                    </CNSelect>
+                    />
                   </div>
                 </div>
 

@@ -113,8 +113,9 @@ const orderSlice = createSlice({
       })
       .addCase(fetchOrders.fulfilled, (state, action) => {
         state.loading = false;
-        const payload = action.payload;
-        state.orders = payload.data || payload.orders || [];
+        const payload = action.payload || {};
+        const list = payload.data ?? payload.orders ?? [];
+        state.orders = Array.isArray(list) ? list : [];
         state.count  = payload.count || state.orders.length;
       })
       .addCase(fetchOrders.rejected, (state, action) => {
@@ -127,7 +128,7 @@ const orderSlice = createSlice({
       })
       .addCase(fetchOrderById.fulfilled, (state, action) => {
         state.loading = false;
-        state.selectedOrder = action.payload;
+        state.selectedOrder = action.payload?.data || action.payload;
       })
       .addCase(fetchOrderById.rejected, (state, action) => {
         state.loading = false;
@@ -139,10 +140,31 @@ const orderSlice = createSlice({
       })
       .addCase(placeOrder.fulfilled, (state, action) => {
         state.submitting = false;
-        state.orders.push(action.payload);
-        state.count += 1;
+        const order = action.payload?.data || action.payload;
+        state.selectedOrder = order;
+        if (!Array.isArray(state.orders)) state.orders = [];
+        state.orders.unshift(order);
+        state.count = state.orders.length;
       })
       .addCase(placeOrder.rejected, (state, action) => {
+        state.submitting = false;
+        state.error = action.payload;
+      })
+      .addCase(confirmPayment.pending, (state) => {
+        state.submitting = true;
+        state.error = null;
+      })
+      .addCase(confirmPayment.fulfilled, (state, action) => {
+        state.submitting = false;
+        const updated = action.payload?.data || action.payload;
+        state.selectedOrder = updated;
+        if (!Array.isArray(state.orders)) state.orders = [];
+        const idx = state.orders.findIndex((o) => o._id === updated?._id);
+        if (idx >= 0) state.orders[idx] = updated;
+        else state.orders.unshift(updated);
+        state.count = state.orders.length;
+      })
+      .addCase(confirmPayment.rejected, (state, action) => {
         state.submitting = false;
         state.error = action.payload;
       })

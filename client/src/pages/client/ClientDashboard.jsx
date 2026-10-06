@@ -5,6 +5,7 @@ import {
   Package, TrendingUp, Clock, CheckCircle2, Truck, MapPin,
   Calendar, ArrowUpRight, RefreshCw, Building2, FileText,
   PlusCircle, LogOut, AlertCircle, XCircle,
+  ArrowLeft,
 } from 'lucide-react';
 import { fetchOrders } from '../../features/orders/orderSlice';
 import { logout } from '../../features/auth/authSlice';
@@ -82,7 +83,8 @@ const BentoCard = ({ label, value, sub, accent, icon: Icon, trend }) => (
 export const ClientDashboard = () => {
   const navigate  = useNavigate();
   const dispatch  = useDispatch();
-  const { orders, loading, error } = useSelector((s) => s.orders);
+  const { orders: rawOrders, loading, error } = useSelector((s) => s.orders) || {};
+  const orders = Array.isArray(rawOrders) ? rawOrders : [];
   const { user }  = useSelector((s) => s.auth);
 
   const [filter, setFilter] = useState('All');
@@ -122,6 +124,9 @@ export const ClientDashboard = () => {
         {/* ── Top Bar ─────────────────────────────────────────────────── */}
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px', marginBottom: '28px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <button onClick={() => navigate(-1)} aria-label="Go back" style={{ background: 'transparent', border: `1px solid ${BORDER}`, borderRadius: '6px', padding: '7px', color: DIM, cursor: 'pointer', display: 'flex' }}>
+              <ArrowLeft size={14} />
+            </button>
             <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: ACCENT + '18', border: `1px solid ${ACCENT}30`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <Building2 size={20} style={{ color: ACCENT }} />
             </div>

@@ -5,27 +5,32 @@ const PricingConfig = require('../models/PricingConfig');
 const estimateFare = async (req, res, next) => {
   try {
     const { pickup, dropoff, cargoWeightKg, priority, cargoType } = req.body;
-    
-    const pickupCoords = await mappingService.getCityCoordinates(pickup.city);
-    const dropoffCoords = await mappingService.getCityCoordinates(dropoff.city);
-    
-    const { distanceKm, durationHours, distanceSource } = await mappingService.getDistanceAndDuration(pickupCoords, dropoffCoords);
-    
-    const { estimatedFarePKR, fareBreakdown } = await pricingService.calculateFare(
+    if (!pickup?.city || !dropoff?.city || !cargoWeightKg) {
+      return res.status(400).json({ success: false, message: 'pickup.city, dropoff.city and cargoWeightKg are required.' });
+    }
+
+    const fallback = { lat: 30.3753, lng: 69.3451 };
+    const pickupCoords  = mappingService.getCityCoordinates(pickup.city, pickup.province)   || fallback;
+    const dropoffCoords = mappingService.getCityCoordinates(dropoff.city, dropoff.province) || fallback;
+
+    const routing = await mappingService.getDistanceAndDuration(pickupCoords, dropoffCoords);
+    const distanceKm = Math.max(5, Math.round(routing.distanceKm * 10) / 10);
+
+    const fare = await pricingService.calculateFare({
       distanceKm,
-      cargoWeightKg,
+      cargoWeightKg: Number(cargoWeightKg),
       priority,
-      cargoType
-    );
-    
+      cargoType,
+    });
+
     res.status(200).json({
       success: true,
       data: {
         distanceKm,
-        durationHours,
-        distanceSource,
-        estimatedFarePKR,
-        fareBreakdown,
+        durationHours: Math.max(routing.durationHours, distanceKm / 60),
+        distanceSource: routing.source,
+        estimatedFarePKR: fare.totalFare,
+        fareBreakdown: fare,
         currency: 'PKR'
       }
     });

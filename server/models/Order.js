@@ -13,7 +13,7 @@ const LocationPointSchema = new mongoose.Schema(
     province:    { type: String, required: true },
     city:        { type: String, required: true },
     area:        { type: String, default: '' },
-    streetAddress: { type: String, required: true, trim: true }, // exact address / building
+    streetAddress: { type: String, default: '', trim: true }, // exact address / building
     coordinates: {
       lat: { type: Number, default: null },
       lng: { type: Number, default: null },

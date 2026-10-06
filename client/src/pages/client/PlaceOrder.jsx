@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import {
@@ -6,38 +6,7 @@ import {
   ChevronRight, AlertCircle, Truck, Zap, Tag, ArrowLeft,
 } from 'lucide-react';
 import { placeOrder } from '../../features/orders/orderSlice';
-
-/* ─── Pakistan Location Data ─────────────────────────────────────────────── */
-const PK_LOCATIONS = {
-  Punjab: {
-    Lahore: ['Gulberg', 'DHA', 'Model Town', 'Johar Town', 'Cantt', 'Iqbal Town', 'Wapda Town'],
-    Faisalabad: ['Madina Town', 'Jinnah Colony', 'Samanabad', 'Susan Road', 'Kohinoor City'],
-    Rawalpindi: ['Saddar', 'Chaklala', 'Bahria Town', 'Satellite Town', 'Committee Chowk'],
-    Multan: ['Gulgasht', 'Cantt', 'Shah Rukn-e-Alam', 'Bosan Road', 'New Multan'],
-    Sialkot: ['Cantt', 'Paris Road', 'Allama Iqbal Road', 'Sambrial', 'Daska'],
-    Gujranwala: ['Trust Colony', 'Satellite Town', 'Model Town', 'Peoples Colony'],
-  },
-  Sindh: {
-    Karachi: ['Clifton', 'DHA', 'Gulshan-e-Iqbal', 'PECHS', 'Korangi', 'Malir'],
-    Hyderabad: ['Latifabad', 'Qasimabad', 'Cantt', 'Hirabad', 'Naseem Nagar'],
-    Sukkur: ['Rohri', 'New Sukkur', 'Minara Road', 'Bunder Road'],
-  },
-  'Khyber Pakhtunkhwa': {
-    Peshawar: ['University Town', 'Hayatabad', 'Cantt', 'Warsak Road'],
-    Abbottabad: ['Cantt', 'Mandian', 'Nawan Shehr', 'Supply Bazar'],
-  },
-  Balochistan: {
-    Quetta: ['Satellite Town', 'Cantt', 'Jinnah Town', 'Pishin Stop'],
-    Gwadar: ['New Town', 'East Bay', 'Fish Harbour', 'Airport Road'],
-  },
-  'Islamabad Capital Territory': {
-    Islamabad: ['F-6', 'F-7', 'F-10', 'G-9', 'G-11', 'I-8', 'I-10', 'DHA', 'Bahria Town', 'Blue Area'],
-  },
-};
-
-const PROVINCES = Object.keys(PK_LOCATIONS);
-const getCities  = (prov) => (prov ? Object.keys(PK_LOCATIONS[prov] || {}) : []);
-const getAreas   = (prov, city) => (prov && city ? PK_LOCATIONS[prov]?.[city] || [] : []);
+import { fetchProvinces, fetchCities, fetchAreas } from '../../services/locationService';
 
 const CARGO_TYPES = [
   'General', 'Fragile', 'Perishable / Cold Chain',
@@ -49,6 +18,20 @@ const BG_MAIN  = '#0E0E0E';
 const BG_CARD  = '#161616';
 const BORDER   = '#2A2A2A';
 const TEXT_DIM = '#9AA3A8';
+
+export const calculateFare = ({ pickupCity, dropoffCity, cargoWeightKg, priority }) => {
+  const distanceKm = pickupCity && pickupCity === dropoffCity
+    ? 25
+    : Math.floor(Math.random() * (1200 - 100) + 100);
+  const baseFare = distanceKm * 150;
+  const weightSurcharge = cargoWeightKg > 500 ? (cargoWeightKg - 500) * 50 : 0;
+  const subtotal = baseFare + weightSurcharge;
+  const priorityMultiplier = priority === 'Express' ? 1.5 : 1;
+  const priorityPremium = subtotal * (priorityMultiplier - 1);
+  const totalFare = subtotal * priorityMultiplier;
+
+  return { distanceKm, baseFare, weightSurcharge, priorityPremium, totalFare };
+};
 
 /* ─── Shared Input Components ────────────────────────────────────────────── */
 const FieldLabel = ({ children, required }) => (
@@ -78,8 +61,8 @@ const InputField = ({ icon: Icon, error, ...props }) => (
         color: '#E0E0E0', fontSize: '13px', fontFamily: "'Inter', system-ui, sans-serif",
         outline: 'none', transition: 'border-color 0.15s',
       }}
-      onFocus={(e) => { e.target.style.borderColor = ACCENT + '88'; }}
-      onBlur={(e)  => { e.target.style.borderColor = error ? '#FF5252' : BORDER; }}
+      onFocus={(e) => { e.target.style.borderColor = ACCENT + '88'; props.onFocus?.(e); }}
+      onBlur={(e)  => { e.target.style.borderColor = error ? '#FF5252' : BORDER; props.onBlur?.(e); }}
     />
     {error && <p style={{ color: '#FF5252', fontSize: '10px', marginTop: '4px', fontFamily: 'monospace' }}>{error}</p>}
   </div>
@@ -112,10 +95,80 @@ const SelectField = ({ icon: Icon, error, children, ...props }) => (
   </div>
 );
 
+const SearchableSelect = ({ icon: Icon, value, options, placeholder, disabled, error, onChange }) => {
+  const [query, setQuery] = useState(value);
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => { setQuery(value); }, [value]);
+
+  const filteredOptions = options.filter((option) => option.toLowerCase().includes(query.toLowerCase()));
+  const acceptExactMatch = (inputValue) => {
+    const exactMatch = options.find((option) => option.toLowerCase() === inputValue.trim().toLowerCase());
+    if (exactMatch) onChange(exactMatch);
+  };
+  const choose = (option) => {
+    setQuery(option);
+    setOpen(false);
+    onChange(option);
+  };
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <InputField
+        icon={Icon}
+        value={query}
+        placeholder={placeholder}
+        disabled={disabled}
+        error={error}
+        onFocus={() => setOpen(true)}
+        onChange={(e) => { setQuery(e.target.value); setOpen(true); if (!e.target.value) onChange(''); else acceptExactMatch(e.target.value); }}
+        onBlur={() => setTimeout(() => { acceptExactMatch(query); setOpen(false); }, 150)}
+      />
+      {open && !disabled && (
+        <div style={{ position: 'absolute', zIndex: 5, top: 'calc(100% + 4px)', left: 0, right: 0, maxHeight: '170px', overflowY: 'auto', background: '#1A1A1A', border: `1px solid ${BORDER}`, borderRadius: '7px' }}>
+          {filteredOptions.length ? filteredOptions.map((option) => (
+            <button key={option} type="button" onMouseDown={() => choose(option)} style={{ display: 'block', width: '100%', border: 'none', background: 'transparent', color: '#E0E0E0', padding: '9px 12px', textAlign: 'left', cursor: 'pointer', fontSize: '12px' }}>
+              {option}
+            </button>
+          )) : <div style={{ padding: '9px 12px', color: TEXT_DIM, fontSize: '12px' }}>No matches</div>}
+        </div>
+      )}
+    </div>
+  );
+};
+
 /* ─── Location Group (Province → City → Area → Street) ──────────────────── */
 const LocationGroup = ({ prefix, label, values, onChange, errors }) => {
-  const cities = getCities(values.province);
-  const areas  = getAreas(values.province, values.city);
+  const [provinces, setProvinces] = useState([]);
+  const [cities,    setCities]    = useState([]);
+  const [areas,     setAreas]     = useState([]);
+  const [locError,  setLocError]  = useState('');
+
+  useEffect(() => {
+    let active = true;
+    fetchProvinces()
+      .then((d) => { if (active) { setProvinces(d); setLocError(''); } })
+      .catch(() => { if (active) setLocError('Failed to load locations from server.'); });
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    if (!values.province) { setCities([]); return undefined; }
+    fetchCities(values.province)
+      .then((d) => { if (active) setCities(d); })
+      .catch(() => { if (active) setLocError('Failed to load cities.'); });
+    return () => { active = false; };
+  }, [values.province]);
+
+  useEffect(() => {
+    let active = true;
+    if (!values.province || !values.city) { setAreas([]); return undefined; }
+    fetchAreas(values.province, values.city)
+      .then((d) => { if (active) setAreas(d); })
+      .catch(() => { if (active) setLocError('Failed to load areas.'); });
+    return () => { active = false; };
+  }, [values.province, values.city]);
 
   const handleChange = (field, val) => {
     if (field === 'province') onChange({ province: val, city: '', area: '', streetAddress: '' });
@@ -147,42 +200,39 @@ const LocationGroup = ({ prefix, label, values, onChange, errors }) => {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
           <div>
             <FieldLabel required>Province</FieldLabel>
-            <SelectField
+            <SearchableSelect
               icon={MapPin}
               value={values.province}
-              onChange={(e) => handleChange('province', e.target.value)}
+              options={provinces}
+              placeholder="Search province…"
+              onChange={(value) => handleChange('province', value)}
               error={errors?.[`${prefix}_province`]}
-            >
-              <option value="">Select province…</option>
-              {PROVINCES.map((p) => <option key={p} value={p}>{p}</option>)}
-            </SelectField>
+            />
           </div>
           <div>
             <FieldLabel required>City</FieldLabel>
-            <SelectField
+            <SearchableSelect
               icon={MapPin}
               value={values.city}
-              onChange={(e) => handleChange('city', e.target.value)}
+              options={cities}
+              placeholder="Search city…"
+              onChange={(value) => handleChange('city', value)}
               disabled={!values.province}
               error={errors?.[`${prefix}_city`]}
-            >
-              <option value="">Select city…</option>
-              {cities.map((c) => <option key={c} value={c}>{c}</option>)}
-            </SelectField>
+            />
           </div>
           <div>
             <FieldLabel>Area / Sector</FieldLabel>
-            <SelectField
+            <SearchableSelect
               value={values.area}
-              onChange={(e) => handleChange('area', e.target.value)}
+              options={areas}
+              placeholder="Search area…"
+              onChange={(value) => handleChange('area', value)}
               disabled={!values.city}
-            >
-              <option value="">Select area…</option>
-              {areas.map((a) => <option key={a} value={a}>{a}</option>)}
-            </SelectField>
+            />
           </div>
           <div>
-            <FieldLabel required>Street / Building</FieldLabel>
+            <FieldLabel>Street / Building</FieldLabel>
             <InputField
               icon={MapPin}
               placeholder="e.g. Plot 12, Main Blvd"
@@ -192,6 +242,9 @@ const LocationGroup = ({ prefix, label, values, onChange, errors }) => {
             />
           </div>
         </div>
+        {locError && (
+          <p style={{ color: '#FF5252', fontSize: '10px', marginTop: '8px', fontFamily: 'monospace' }}>{locError}</p>
+        )}
       </div>
     </div>
   );
@@ -218,6 +271,7 @@ export const PlaceOrder = () => {
     notes:             '',
   });
   const [errors, setErrors] = useState({});
+  const [fare, setFare] = useState(null);
 
   const setField = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
 
@@ -225,10 +279,8 @@ export const PlaceOrder = () => {
     const errs = {};
     if (!pickup.province)      errs.pickup_province = 'Required';
     if (!pickup.city)          errs.pickup_city      = 'Required';
-    if (!pickup.streetAddress) errs.pickup_street    = 'Required';
     if (!dropoff.province)     errs.dropoff_province = 'Required';
     if (!dropoff.city)         errs.dropoff_city     = 'Required';
-    if (!dropoff.streetAddress)errs.dropoff_street   = 'Required';
     if (!form.cargoWeightKg || isNaN(Number(form.cargoWeightKg)) || Number(form.cargoWeightKg) < 1)
       errs.cargoWeightKg = 'Enter a valid weight (min 1 kg)';
     if (!form.cargoDescription.trim()) errs.cargoDescription = 'Required';
@@ -243,6 +295,14 @@ export const PlaceOrder = () => {
     if (Object.keys(errs).length > 0) { setErrors(errs); return; }
     setErrors({});
 
+    const calculatedFare = calculateFare({
+      pickupCity: pickup.city,
+      dropoffCity: dropoff.city,
+      cargoWeightKg: Number(form.cargoWeightKg),
+      priority: form.priority,
+    });
+    setFare(calculatedFare);
+
     const payload = {
       pickup:  { ...pickup },
       dropoff: { ...dropoff },
@@ -254,13 +314,37 @@ export const PlaceOrder = () => {
       contactMobile:     form.contactMobile,
       companyNtn:        form.companyNtn,
       notes:             form.notes,
+      calculatedDistanceKm: calculatedFare.distanceKm,
+      estimatedFarePKR: calculatedFare.totalFare,
+      fareBreakdown: calculatedFare,
     };
 
-    const result = await dispatch(placeOrder(payload));
-    if (placeOrder.fulfilled.match(result)) {
-      // Navigate to fare receipt with order data
-      const order = result.payload?.data || result.payload;
-      navigate('/client/fare-receipt', { state: { order } });
+    try {
+      const response = await dispatch(placeOrder(payload)).unwrap();
+      const createdOrder = response?.data || response;
+      const orderId = createdOrder?._id;
+      const transitHours = Math.max(1, Math.round(calculatedFare.distanceKm / 60));
+      const order = {
+        ...createdOrder,
+        _id: orderId,
+        cargoWeightKg: Number(form.cargoWeightKg),
+        calculatedDistanceKm: calculatedFare.distanceKm,
+        estimatedFarePKR: calculatedFare.totalFare,
+        fareBreakdown: calculatedFare,
+      };
+
+      navigate('/client/fare-receipt', {
+        state: {
+          order,
+          orderId,
+          cargoWeight: Number(form.cargoWeightKg),
+          transitHours,
+          pickupCity: pickup.city,
+          dropoffCity: dropoff.city,
+        },
+      });
+    } catch (error) {
+      setErrors((current) => ({ ...current, submit: error || 'Failed to create order.' }));
     }
   };
 
@@ -271,7 +355,7 @@ export const PlaceOrder = () => {
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '28px' }}>
           <button
-            onClick={() => navigate('/client/dashboard')}
+            onClick={() => navigate(-1)}
             style={{
               background: 'transparent', border: `1px solid ${BORDER}`, borderRadius: '6px',
               padding: '6px 10px', color: TEXT_DIM, cursor: 'pointer',
@@ -436,6 +520,12 @@ export const PlaceOrder = () => {
               }}>
                 <AlertCircle size={14} style={{ color: '#FF5252', flexShrink: 0 }} />
                 <span style={{ fontSize: '12px', color: '#FF5252', fontFamily: 'monospace' }}>{orderError}</span>
+              </div>
+            )}
+
+            {fare && (
+              <div style={{ background: ACCENT + '08', border: `1px solid ${ACCENT}30`, borderRadius: '8px', padding: '12px 16px', color: TEXT_DIM, fontFamily: 'monospace', fontSize: '11px' }}>
+                Estimated fare: <strong style={{ color: ACCENT }}>₨ {fare.totalFare.toLocaleString('en-PK')}</strong> for {fare.distanceKm} km
               </div>
             )}
 

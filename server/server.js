@@ -10,6 +10,7 @@ const swaggerSpec    = require('./config/swagger');
 const { notFound, errorHandler } = require('./middleware/errorMiddleware');
 const { startExpiryJob }   = require('./utils/expiryJob');
 const { autoSeedIfEmpty }  = require('./utils/seedData');
+const { seedDriverData }   = require('./utils/seedDriverData');
 
 // V2.0 Routes (3-role system: Client, Driver, Admin)
 const authRoutes     = require('./routes/authRoutes');
@@ -79,6 +80,7 @@ const startServer = async () => {
 
     // Seed V2.0 demo accounts if DB is empty
     await autoSeedIfEmpty();
+    await seedDriverData();
 
     // Start 72-hour order expiry background job
     startExpiryJob();

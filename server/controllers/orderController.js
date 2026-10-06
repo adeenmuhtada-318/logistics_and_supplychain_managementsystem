@@ -26,11 +26,11 @@ const createOrder = async (req, res, next) => {
     } = req.body;
 
     // ── Mandatory field validation ─────────────────────────────────────────
-    if (!pickup || !pickup.province || !pickup.city || !pickup.streetAddress) {
-      return res.status(400).json({ success: false, message: 'Pickup location details are incomplete (province, city, streetAddress required).' });
+    if (!pickup || !pickup.province || !pickup.city) {
+      return res.status(400).json({ success: false, message: 'Pickup location details are incomplete (province and city required).' });
     }
-    if (!dropoff || !dropoff.province || !dropoff.city || !dropoff.streetAddress) {
-      return res.status(400).json({ success: false, message: 'Drop-off location details are incomplete (province, city, streetAddress required).' });
+    if (!dropoff || !dropoff.province || !dropoff.city) {
+      return res.status(400).json({ success: false, message: 'Drop-off location details are incomplete (province and city required).' });
     }
     if (!cargoWeightKg || isNaN(Number(cargoWeightKg)) || Number(cargoWeightKg) < 1) {
       return res.status(400).json({ success: false, message: 'Cargo weight (kg) is required and must be at least 1 kg.' });
@@ -48,14 +48,17 @@ const createOrder = async (req, res, next) => {
     const resolvedPriority = ['Standard', 'Express'].includes(priority) ? priority : 'Standard';
 
     // ── Auto-calculate distance & route ────────────────────────────────────
-    const pickupCoords  = mappingService.getCityCoordinates(pickup.city);
-    const dropoffCoords = mappingService.getCityCoordinates(dropoff.city);
+    const pickupCoords  = mappingService.getCityCoordinates(pickup.city, pickup.province);
+    const dropoffCoords = mappingService.getCityCoordinates(dropoff.city, dropoff.province);
 
-    const { distanceKm, durationHours, source: distanceSource } =
-      await mappingService.getDistanceAndDuration(
-        pickupCoords  || { lat: 30.3753, lng: 69.3451 }, // Pakistan centroid fallback
-        dropoffCoords || { lat: 30.3753, lng: 69.3451 }
-      );
+    const routing = await mappingService.getDistanceAndDuration(
+      pickupCoords  || { lat: 30.3753, lng: 69.3451 }, // Pakistan centroid fallback
+      dropoffCoords || { lat: 30.3753, lng: 69.3451 }
+    );
+    const distanceSource = routing.source;
+    // Intra-city / same-point deliveries are billed for a 5 km minimum run
+    const distanceKm    = Math.max(5, Math.round(routing.distanceKm * 10) / 10);
+    const durationHours = Math.max(routing.durationHours, distanceKm / 60);
 
     // ── Auto-calculate fare ────────────────────────────────────────────────
     const fareResult = await pricingService.calculateFare({
@@ -87,7 +90,7 @@ const createOrder = async (req, res, next) => {
       estimatedFarePKR:  fareResult.totalFare,
       fareBreakdown: {
         baseFare:        fareResult.baseFare,
-        weightSurcharge: fareResult.weightSurcharge || 0,
+        weightSurcharge: (fareResult.weightSurcharge || 0) + (fareResult.hazardousSurcharge || 0) + (fareResult.serviceFee || 0),
         priorityPremium: fareResult.priorityPremium,
         totalFare:       fareResult.totalFare,
       },
